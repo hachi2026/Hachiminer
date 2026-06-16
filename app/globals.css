@@ -1,0 +1,30 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0f0224;
+  color: #e6edf3;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+input:focus {
+  outline: none;
+  border-color: #a78bfa !important;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track { background: #0f0224; }
+::-webkit-scrollbar-thumb { background: #5b21b6; border-radius: 2px; }
