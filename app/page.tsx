@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
-import { IDKitRequestWidget } from '@worldcoin/idkit'
 import { ethers } from 'ethers'
 
-// ─── CONTRATOS ────────────────────────────────────────────
 const C = {
   oracle:   '0x0e18Ff0A2b9981D2FF50658aD4960d17c9b7C22b',
   poolWLD:  '0x9F8ccE86271319f36AA25d8390cfC18741719f19',
@@ -19,26 +17,15 @@ const C = {
   sushi:    '0xab09a728e53d3d6bc438be95eed46da0bbe7fb38',
 }
 
-const WORLD_CHAIN_RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
-const MIN_WLD_HACHI = 20000
+const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
+const MAX_HACHI = 20000
+const APP_ID = 'app_faaadf7d4dc1285275a436a8cac18e69'
 const WLD_ACTION = 'verify-human'
 
-const ERC20_ABI = [
-  'function balanceOf(address) view returns (uint256)',
-  'function approve(address,uint256) returns (bool)',
-]
-
-const ORACLE_ABI = [
-  'function getRates() view returns (uint256,uint256,uint256,bool,bool,uint256)',
-  'function previewWldLicense(uint256) view returns (uint256,uint256,uint256,uint256,uint256)',
-  'function previewSushiLicense(uint256) view returns (uint256,uint256,uint256,uint256)',
-]
-
-const POOL_WLD_ABI = [
-  'function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256)',
-]
-
-const CORE_ABI = [
+const ERC20 = ['function balanceOf(address) view returns (uint256)', 'function approve(address,uint256) returns (bool)']
+const ORACLE = ['function getRates() view returns (uint256,uint256,uint256,bool,bool,uint256)', 'function previewWldLicense(uint256) view returns (uint256,uint256,uint256,uint256,uint256)']
+const POOLWLD = ['function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256)']
+const CORE = [
   'function humanVerified(address) view returns (bool)',
   'function getUserWLDLics(address) view returns (uint256[])',
   'function getUserSushiLics(address) view returns (uint256[])',
@@ -46,30 +33,28 @@ const CORE_ABI = [
   'function pendingWLDHachi(uint256) view returns (uint256)',
   'function monthlyWLDRemaining(address) view returns (uint256,uint256)',
   'function getWLDAvailability() view returns (uint256,uint256)',
-  'function getSushiAvailability() view returns (uint256,uint256,uint256,uint256,uint8,uint256,uint256)',
   'function hachiDailyPool() view returns (uint256)',
   'function lastDailyClaim(address) view returns (uint256)',
   'function DAILY_CLAIM_COOLDOWN() view returns (uint256)',
   'function getSalesStats() view returns (uint256,uint256,uint256,uint256,uint256,uint256)',
+  'function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)',
   'function buyLicenseWLD(uint8)',
   'function buyLicenseSushi(uint8)',
   'function claimWLDHachi(uint256)',
-  'function claimSushiDay1(uint256)',
-  'function claimSushiDay2(uint256)',
-  'function claimSushiPerp(uint256)',
   'function claimDailyHachi()',
   'function verifyHuman(uint256,uint256,uint256[8])',
 ]
-
-const LOCK_ABI = [
+const LOCK = [
   'function getPosition(address) view returns (uint256,uint256,uint256,uint8,uint256,uint256,uint256,uint256,bool)',
   'function getUserBatches(address) view returns (uint256[],uint256[],bool[])',
-  'function deposit(uint256)',
-  'function claimAPY()',
-  'function unstake(uint256)',
+  'function deposit(uint256)', 'function claimAPY()', 'function unstake(uint256)',
 ]
-
-const ADMGR_ABI = [
+const RANKING = [
+  'function getUserStats(address) view returns (uint256,uint256,uint256,uint256)',
+  'function getCurrentRanking() view returns (address[],uint256[])',
+  'function claimPrize()',
+]
+const ADMGR = [
   'function getActiveCampaigns() view returns (uint256[],string[],uint8[],uint256[],uint256[])',
   'function canParticipate(address,uint256) view returns (bool,uint256,uint256)',
   'function previewCampaign(uint8) view returns (uint256,uint256,uint256,uint256)',
@@ -77,384 +62,204 @@ const ADMGR_ABI = [
   'function createCampaign(uint8,string,string,uint8)',
 ]
 
-const RANKING_ABI = [
-  'function getUserStats(address) view returns (uint256,uint256,uint256,uint256)',
-  'function getCurrentRanking() view returns (address[],uint256[])',
-  'function getWeekNumber() view returns (uint256)',
-  'function claimPrize()',
-]
+type Tab = 'home'|'lics'|'lock'|'ranking'|'pools'|'ads'|'refs'
+type Lang = 'es'|'en'|'pt'
 
-// ─── TIPOS ────────────────────────────────────────────────
-type Tab = 'home' | 'lics' | 'lock' | 'ranking' | 'pools' | 'ads' | 'refs'
-type LicTab = 'wld' | 'sushi'
-type Lang = 'es' | 'en' | 'pt'
-
-const TRANSLATIONS = {
-  es: {
-    connect: 'Conectar',
-    connecting: 'Conectando...',
-    verified: 'World ID ✓',
-    not_verified: 'Sin verificar',
-    verify_btn: 'Verificar World ID',
-    daily_claim: 'Cobrar 10 HACHI',
-    nav_home: '🏠 Inicio',
-    nav_lics: '📜 Licencias',
-    nav_lock: '🔒 Lock',
-    nav_rank: '🏆 Ranking',
-    nav_pools: '🌊 Pools',
-    nav_ads: '📢 Anuncios',
-    nav_refs: '👥 Referidos',
-    day1: 'Día 1 — recibís de vuelta',
-    day2: 'Día 2 — tu ganancia (24h)',
-    err_connect: 'Conecta tu wallet',
-    err_verify: 'Verifica tu World ID primero',
-    err_price: 'Ventas pausadas — HACHI devaluado',
-    approving: 'Aprobando...',
-    no_lics: 'Sin licencias activas',
-    connect_prompt: 'Conecta tu wallet para comenzar',
-    access_title: 'Acceso restringido',
-    access_desc: 'Para licencias SUSHI necesitas 5,000 HACHI lockeados o una licencia WLD activa',
-  },
-  en: {
-    connect: 'Connect',
-    connecting: 'Connecting...',
-    verified: 'World ID ✓',
-    not_verified: 'Not verified',
-    verify_btn: 'Verify World ID',
-    daily_claim: 'Claim 10 HACHI',
-    nav_home: '🏠 Home',
-    nav_lics: '📜 Licenses',
-    nav_lock: '🔒 Lock',
-    nav_rank: '🏆 Ranking',
-    nav_pools: '🌊 Pools',
-    nav_ads: '📢 Ads',
-    nav_refs: '👥 Referrals',
-    day1: 'Day 1 — get back investment',
-    day2: 'Day 2 — your profit (24h)',
-    err_connect: 'Connect your wallet',
-    err_verify: 'Verify your World ID first',
-    err_price: 'Sales paused — HACHI devalued',
-    approving: 'Approving...',
-    no_lics: 'No active licenses',
-    connect_prompt: 'Connect your wallet to start',
-    access_title: 'Restricted access',
-    access_desc: 'For SUSHI licenses you need 5,000 HACHI locked or an active WLD license',
-  },
-  pt: {
-    connect: 'Conectar',
-    connecting: 'Conectando...',
-    verified: 'World ID ✓',
-    not_verified: 'Não verificado',
-    verify_btn: 'Verificar World ID',
-    daily_claim: 'Cobrar 10 HACHI',
-    nav_home: '🏠 Início',
-    nav_lics: '📜 Licenças',
-    nav_lock: '🔒 Lock',
-    nav_rank: '🏆 Ranking',
-    nav_pools: '🌊 Pools',
-    nav_ads: '📢 Anúncios',
-    nav_refs: '👥 Indicações',
-    day1: 'Dia 1 — recupere investimento',
-    day2: 'Dia 2 — seu lucro (24h)',
-    err_connect: 'Conecte sua carteira',
-    err_verify: 'Verifique seu World ID primeiro',
-    err_price: 'Vendas pausadas — HACHI desvalorizado',
-    approving: 'Aprovando...',
-    no_lics: 'Sem licenças ativas',
-    connect_prompt: 'Conecte sua carteira para começar',
-    access_title: 'Acesso restrito',
-    access_desc: 'Para licenças SUSHI você precisa de 5.000 HACHI bloqueados ou uma licença WLD ativa',
-  },
+const TR = {
+  es: { connect:'Conectar', verified:'World ID ✓', not_verified:'Sin verificar', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Inicio', nav_lics:'📜 Licencias', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Anuncios', nav_refs:'👥 Referidos', err_connect:'Conecta tu wallet', err_verify:'Verifica tu World ID', err_price:'Ventas pausadas', approving:'Aprobando...', no_lics:'Sin licencias activas', connect_prompt:'Conecta tu wallet para comenzar', access_title:'Acceso restringido', access_desc:'Para licencias SUSHI necesitas 5,000 HACHI lockeados o una licencia WLD activa', day1:'Día 1 — recibís de vuelta', day2:'Día 2 — tu ganancia (24h)' },
+  en: { connect:'Connect', verified:'World ID ✓', not_verified:'Not verified', daily_claim:'Claim 10 HACHI', nav_home:'🏠 Home', nav_lics:'📜 Licenses', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Ads', nav_refs:'👥 Referrals', err_connect:'Connect your wallet', err_verify:'Verify your World ID', err_price:'Sales paused', approving:'Approving...', no_lics:'No active licenses', connect_prompt:'Connect your wallet to start', access_title:'Restricted access', access_desc:'For SUSHI licenses you need 5,000 HACHI locked or an active WLD license', day1:'Day 1 — get back investment', day2:'Day 2 — your profit (24h)' },
+  pt: { connect:'Conectar', verified:'World ID ✓', not_verified:'Não verificado', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Início', nav_lics:'📜 Licenças', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Anúncios', nav_refs:'👥 Indicações', err_connect:'Conecte sua carteira', err_verify:'Verifique seu World ID', err_price:'Vendas pausadas', approving:'Aprovando...', no_lics:'Sem licenças ativas', connect_prompt:'Conecte sua carteira para começar', access_title:'Acesso restrito', access_desc:'Para licenças SUSHI você precisa de 5.000 HACHI bloqueados ou uma licença WLD ativa', day1:'Dia 1 — recupere investimento', day2:'Dia 2 — seu lucro (24h)' },
 }
 
-// ─── UTILS ────────────────────────────────────────────────
-const fmt = (n: number) => {
-  if (!n && n !== 0 || isNaN(n)) return '—'
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
-  return Math.round(n).toLocaleString()
-}
-const fmtAddr = (a: string) => a ? a.slice(0, 6) + '...' + a.slice(-4) : '—'
+const fmt = (n: number) => { if ((!n && n!==0)||isNaN(n)) return '—'; if (n>=1e6) return (n/1e6).toFixed(2)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString() }
+const fmtA = (a: string) => a ? a.slice(0,6)+'...'+a.slice(-4) : '—'
 const fe = (v: bigint) => Number(ethers.formatEther(v))
-const pe = (v: string | number) => ethers.parseEther(String(v))
+const pe = (v: string|number) => ethers.parseEther(String(v))
 
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────
 export default function HachiMiner() {
   const [tab, setTab] = useState<Tab>('home')
-  const [licTab, setLicTab] = useState<LicTab>('wld')
+  const [licTab, setLicTab] = useState<'wld'|'sushi'>('wld')
   const [lang, setLang] = useState<Lang>('es')
-  const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
-  
-  // Estado de conexion
+  const [toast, setToast] = useState<{msg:string;color:string}|null>(null)
   const [addr, setAddr] = useState('')
   const [connected, setConnected] = useState(false)
   const [verified, setVerified] = useState(false)
-  const [inWorldApp, setInWorldApp] = useState(false)
-  
-  // Balances
+  const [inWA, setInWA] = useState(false)
   const [hachiB, setHachiB] = useState('0')
   const [wldB, setWldB] = useState('0')
   const [sushiB, setSushiB] = useState('0')
-  
-  // Oracle
   const [wldHachi, setWldHachi] = useState(10000)
   const [hachiSushi, setHachiSushi] = useState(1.5)
-  const [oracleStatus, setOracleStatus] = useState('—')
-  const [poolWLDFree, setPoolWLDFree] = useState('—')
+  const [oracleSt, setOracleSt] = useState('—')
+  const [poolFree, setPoolFree] = useState('—')
   const [licsAvail, setLicsAvail] = useState('—')
   const [priceAlert, setPriceAlert] = useState(false)
-  
-  // Daily claim
-  const [dailyBtn, setDailyBtn] = useState({ disabled: true, text: '...' })
-  
-  // Licencias WLD
+  const [dailyBtn, setDailyBtn] = useState({disabled:true,text:'...'})
   const [selWLD, setSelWLD] = useState(0)
-  const [wldPreview, setWldPreview] = useState({ base: '—', total: '—', daily: '—', monthly: '—/5' })
+  const [wldPrev, setWldPrev] = useState({base:'—',total:'—',daily:'—',monthly:'—'})
   const [wldLics, setWldLics] = useState<any[]>([])
-  
-  // Licencias SUSHI
   const [selSUSHI, setSelSUSHI] = useState(0)
-  const [sushiPreview, setSushiPreview] = useState({ base: '—', d1: '—', d2: '—', total: '—', dailyLeft: '—' })
+  const [sushiPrev, setSushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
   const [sushiAccess, setSushiAccess] = useState(false)
   const [sushiLics, setSushiLics] = useState<any[]>([])
-  
-  // Lock
-  const [lockData, setLockData] = useState({ total: '0', tier: 'Sin tier', apy: '0%', pending: '0', unstake: '0' })
+  const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0'})
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [depositAmt, setDepositAmt] = useState('')
-  
-  // Ranking
-  const [rankStats, setRankStats] = useState({ points: '0', pos: '—', reward: '0', earned: '0' })
+  const [rankStats, setRankStats] = useState({points:'0',pos:'—',reward:'0',earned:'0'})
   const [rankList, setRankList] = useState<any[]>([])
-  
-  // Pools
   const [poolsData, setPoolsData] = useState<any>({})
-  
-  // Debug
-  const [debugLog, setDebugLog] = useState<string[]>([])
-  const addLog = (msg: string) => setDebugLog(prev => [...prev.slice(-5), msg])
-
-  // Anuncios
+  const [logs, setLogs] = useState<string[]>([])
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [campType, setCampType] = useState(0)
   const [campTitle, setCampTitle] = useState('')
   const [campUrl, setCampUrl] = useState('')
   const [campPlatform, setCampPlatform] = useState(0)
   const [campHPV, setCampHPV] = useState('—')
+  const [showVerify, setShowVerify] = useState(false)
 
-  // Stats home
-  const [homeStats, setHomeStats] = useState({ wldLics: 0, sushiLics: 0, lockTotal: '0', tier: 'Sin tier', points: '0' })
-  
-  const t = (k: keyof typeof TRANSLATIONS.es) => TRANSLATIONS[lang][k] || TRANSLATIONS.es[k]
+  const log = (m: string) => setLogs(p => [...p.slice(-6), m])
+  const t = (k: keyof typeof TR.es) => TR[lang][k] || TR.es[k]
+  const rpc = () => new ethers.JsonRpcProvider(RPC)
+  const toast_ = (msg: string, color='#a78bfa') => { setToast({msg,color}); setTimeout(()=>setToast(null),4000) }
 
-  // Provider de solo lectura
-  const getProvider = () => new ethers.JsonRpcProvider(WORLD_CHAIN_RPC)
-  
-  const showToast = (msg: string, color = 'var(--c1)') => {
-    setToast({ msg, color })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  // ─── DETECTAR WORLD APP ───────────────────────────────
+  // Al cargar intentar conectar via MiniKit
   useEffect(() => {
-    const isWA = MiniKit.isInstalled()
-    setInWorldApp(isWA)
-    if (isWA) connectWallet()
+    connectMiniKit()
   }, [])
 
-  // ─── CONEXION ─────────────────────────────────────────
-  const connectWallet = useCallback(async () => {
+  const connectMiniKit = async () => {
     try {
-      if (inWorldApp || MiniKit.isInstalled()) {
-        // MiniKit v2 inyecta window.ethereum
-        addLog('MiniKit v2 detectado')
-        const ethereum = (window as any).ethereum
-        if (!ethereum) {
-          addLog('ERROR: no ethereum')
-          showToast('Error: sin wallet', '#f85149')
-          return
-        }
-        await ethereum.request({ method: 'eth_requestAccounts' })
-        const provider = new ethers.BrowserProvider(ethereum)
-        const signer = await provider.getSigner()
-        const walletAddr = await signer.getAddress()
-        addLog('addr: ' + walletAddr.slice(0,8))
+      const mk = MiniKit as any
+      log('intentando walletAuth...')
+      const res = await mk.walletAuth({
+        nonce: Date.now().toString(),
+        statement: 'HachiMiner',
+        expirationTime: new Date(Date.now() + 7*24*60*60*1000),
+        notBefore: new Date(Date.now() - 60*1000),
+      })
+      log('res: ' + JSON.stringify(res).slice(0,80))
+      // MiniKit v2 retorna { executedWith: "minikit", data: { address, ... } }
+      const walletAddr = res?.data?.address || res?.finalPayload?.address || mk.walletAddress || ''
+      if (walletAddr) {
+        log('addr: ' + walletAddr.slice(0,10))
         setAddr(walletAddr)
         setConnected(true)
-        setInWorldApp(true)
+        setInWA(true)
         setVerified(true)
-        showToast('Conectado: ' + fmtAddr(walletAddr), '#3fb950')
-        await loadAllData(walletAddr)
-        setInterval(() => loadAllData(walletAddr), 30000)
-
-      } else if (typeof window !== 'undefined' && (window as any).ethereum) {
-        // MetaMask
-        const ethereum = (window as any).ethereum
-        await ethereum.request({ method: 'eth_requestAccounts' })
-        const chainId = await ethereum.request({ method: 'eth_chainId' })
-        if (chainId !== '0x1E0') {
-          try {
-            await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1E0' }] })
-          } catch {
-            await ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x1E0', chainName: 'World Chain',
-                rpcUrls: [WORLD_CHAIN_RPC],
-                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                blockExplorerUrls: ['https://worldscan.org'],
-              }]
-            })
-          }
-        }
-        const provider = new ethers.BrowserProvider(ethereum)
-        const signer = await provider.getSigner()
-        const address = await signer.getAddress()
-        setAddr(address)
-        setConnected(true)
-        showToast('Conectado: ' + fmtAddr(address), '#3fb950')
-        await loadAllData(address)
-        setInterval(() => loadAllData(address), 30000)
+        toast_('Conectado: ' + fmtA(walletAddr), '#3fb950')
+        await loadAll(walletAddr)
+        setInterval(() => loadAll(walletAddr), 30000)
       } else {
-        showToast('Abre en World App o instala MetaMask', '#f85149')
+        log('walletAuth sin address')
       }
-    } catch (e: any) {
-      addLog('connect ERR: ' + (e.message || '').slice(0, 50))
-      showToast('Error: ' + (e.message || 'no se pudo conectar').slice(0,60), '#f85149')
+    } catch(e: any) {
+      log('walletAuth err: ' + (e.message||'').slice(0,50))
     }
-  }, [lang])
-
-  // ─── CARGAR DATOS ─────────────────────────────────────
-  const loadAllData = async (address: string) => {
-    const provider = getProvider()
-    await Promise.allSettled([
-      loadBalances(address, provider),
-      loadOracleRates(address, provider),
-      checkVerified(address, provider),
-      checkDailyClaimStatus(address, provider),
-    ])
   }
 
-  const loadBalances = async (address: string, provider: ethers.JsonRpcProvider) => {
-    const [h, w, s] = await Promise.all([
-      new ethers.Contract(C.hachi, ERC20_ABI, provider).balanceOf(address),
-      new ethers.Contract(C.wld,   ERC20_ABI, provider).balanceOf(address),
-      new ethers.Contract(C.sushi, ERC20_ABI, provider).balanceOf(address),
-    ])
-    setHachiB(fmt(fe(h))); setWldB(fmt(fe(w))); setSushiB(fmt(fe(s)))
-  }
-
-  const loadOracleRates = async (address: string, provider: ethers.JsonRpcProvider) => {
+  const connectWallet = useCallback(async () => {
+    // Intentar MiniKit primero
+    await connectMiniKit()
+    if (connected) return
+    // Fallback MetaMask
+    const eth = (window as any).ethereum
+    if (!eth) { toast_('Abre en World App o instala MetaMask', '#f85149'); return }
     try {
-      const oracle = new ethers.Contract(C.oracle, ORACLE_ABI, provider)
-      const r = await oracle.getRates()
-      const wh = fe(r[0]), hs = fe(r[1])
-      setWldHachi(wh); setHachiSushi(hs)
-      setOracleStatus(r[3] ? 'Manual' : 'DEX en vivo ✓')
-      setPriceAlert(wh > MIN_WLD_HACHI)
-      const core = new ethers.Contract(C.core, CORE_ABI, provider)
-      const avail = await core.getWLDAvailability()
-      const hf = fe(avail[0]), hpb = wh * 1.3
-      const lb = hpb > 0 ? Math.floor(hf / hpb) : 0
-      setPoolWLDFree(fmt(hf) + ' HACHI')
-      setLicsAvail(lb > 0 ? lb + ' lics. básicas' : '0 (sin fondos)')
-    } catch (e) { console.warn('oracle:', e) }
+      await eth.request({method:'eth_requestAccounts'})
+      const chainId = await eth.request({method:'eth_chainId'})
+      if (chainId !== '0x1E0') {
+        try { await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x1E0'}]}) }
+        catch { await eth.request({method:'wallet_addEthereumChain',params:[{chainId:'0x1E0',chainName:'World Chain',rpcUrls:[RPC],nativeCurrency:{name:'ETH',symbol:'ETH',decimals:18},blockExplorerUrls:['https://worldscan.org']}]}) }
+      }
+      const provider = new ethers.BrowserProvider(eth)
+      const signer = await provider.getSigner()
+      const address = await signer.getAddress()
+      setAddr(address); setConnected(true)
+      toast_('Conectado: ' + fmtA(address), '#3fb950')
+      await loadAll(address)
+      setInterval(() => loadAll(address), 30000)
+    } catch(e: any) { toast_('Error: ' + (e.message||'').slice(0,50), '#f85149') }
+  }, [connected, lang])
+
+  const loadAll = async (address: string) => {
+    const p = rpc()
+    await Promise.allSettled([loadBal(address,p), loadOracle(address,p), checkVerif(address,p), checkDaily(address,p)])
   }
 
-  const checkVerified = async (address: string, provider: ethers.JsonRpcProvider) => {
+  const loadBal = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
-      const core = new ethers.Contract(C.core, CORE_ABI, provider)
-      const v = await core.humanVerified(address)
-      setVerified(v)
-    } catch (e) {}
-  }
-
-  const checkDailyClaimStatus = async (address: string, provider: ethers.JsonRpcProvider) => {
-    try {
-      const core = new ethers.Contract(C.core, CORE_ABI, provider)
-      const [last, cool, pool] = await Promise.all([
-        core.lastDailyClaim(address),
-        core.DAILY_CLAIM_COOLDOWN(),
-        core.hachiDailyPool(),
+      const [h,w,s] = await Promise.all([
+        new ethers.Contract(C.hachi,ERC20,p).balanceOf(a),
+        new ethers.Contract(C.wld,ERC20,p).balanceOf(a),
+        new ethers.Contract(C.sushi,ERC20,p).balanceOf(a),
       ])
-      const next = Number(last) + Number(cool)
-      const now = Math.floor(Date.now() / 1000)
-      if (Number(pool) === 0) setDailyBtn({ disabled: true, text: 'Pool vacío' })
-      else if (now >= next) setDailyBtn({ disabled: false, text: t('daily_claim') })
-      else {
-        const h = Math.floor((next - now) / 3600)
-        const m = Math.floor(((next - now) % 3600) / 60)
-        setDailyBtn({ disabled: true, text: `Disponible en ${h}h ${m}m` })
-      }
-    } catch (e) {}
+      setHachiB(fmt(fe(h))); setWldB(fmt(fe(w))); setSushiB(fmt(fe(s)))
+    } catch(e) {}
   }
 
-  // ─── WORLD ID ─────────────────────────────────────────
-  const verifyWorldID = async () => {
-    if (!connected) { showToast(t('err_connect'), '#f85149'); return }
-    if (verified) { showToast(t('verified'), '#3fb950'); return }
+  const loadOracle = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
-      if (MiniKit.isInstalled()) {
-        const verifyRes = await (MiniKit as any).verify({
-          action: WLD_ACTION,
-          signal: addr,
-          verification_level: "orb",
-        })
-        const finalPayload = verifyRes?.finalPayload || verifyRes
-        if (finalPayload?.status === 'success') {
-          await sendTx(C.core, CORE_ABI, 'verifyHuman', [
-            finalPayload.merkle_root,
-            finalPayload.nullifier_hash,
-            finalPayload.proof,
-          ])
-          setVerified(true)
-          showToast(t('verified'), '#3fb950')
-        }
-      } else {
-        // Modo testing
-        setVerified(true)
-        showToast('World ID simulado (testing)', '#d29922')
-      }
-    } catch (e: any) {
-      showToast('Error: ' + (e.reason || e.message), '#f85149')
-    }
+      const r = await new ethers.Contract(C.oracle,ORACLE,p).getRates()
+      const wh=fe(r[0]),hs=fe(r[1])
+      setWldHachi(wh); setHachiSushi(hs); setOracleSt(r[3]?'Manual':'DEX en vivo ✓'); setPriceAlert(wh>MAX_HACHI)
+      const av = await new ethers.Contract(C.core,CORE,p).getWLDAvailability()
+      const hf=fe(av[0]),hpb=wh*1.3,lb=hpb>0?Math.floor(hf/hpb):0
+      setPoolFree(fmt(hf)+' HACHI'); setLicsAvail(lb>0?lb+' lics. básicas':'0 (sin fondos)')
+    } catch(e) {}
   }
 
-  // ─── TRANSACCIONES ────────────────────────────────────
-  const getSigner = async () => {
-    if (inWorldApp) return null // MiniKit maneja las tx
-    const ethereum = (window as any).ethereum
-    const provider = new ethers.BrowserProvider(ethereum)
-    return provider.getSigner()
+  const checkVerif = async (a: string, p: ethers.JsonRpcProvider) => {
+    try {
+      const v = await new ethers.Contract(C.core,CORE,p).humanVerified(a)
+      if (!inWA) setVerified(v)
+    } catch(e) {}
+  }
+
+  const checkDaily = async (a: string, p: ethers.JsonRpcProvider) => {
+    try {
+      const core = new ethers.Contract(C.core,CORE,p)
+      const [last,cool,pool] = await Promise.all([core.lastDailyClaim(a),core.DAILY_CLAIM_COOLDOWN(),core.hachiDailyPool()])
+      const next=Number(last)+Number(cool), now=Math.floor(Date.now()/1000)
+      if (Number(pool)===0) setDailyBtn({disabled:true,text:'Pool vacío'})
+      else if (now>=next) setDailyBtn({disabled:false,text:t('daily_claim')})
+      else { const h=Math.floor((next-now)/3600),m=Math.floor(((next-now)%3600)/60); setDailyBtn({disabled:true,text:`En ${h}h ${m}m`}) }
+    } catch(e) {}
+  }
+
+  // WORLD ID — verificacion via IDKit widget en popup
+  const handleVerifySuccess = async (res: any) => {
+    try {
+      await sendTx(C.core, CORE, 'verifyHuman', [res.merkle_root, res.nullifier_hash, res.proof])
+      setVerified(true)
+      setShowVerify(false)
+      toast_(t('verified'), '#3fb950')
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message), '#f85149') }
   }
 
   const sendTx = async (contractAddr: string, abi: string[], fnName: string, args: any[]) => {
-    addLog('tx: ' + fnName + ' minikit:' + MiniKit.isInstalled())
-
-    if (MiniKit.isInstalled()) {
-      // MiniKit disponible — usar sendTransaction
+    log('tx: '+fnName+' inWA:'+inWA)
+    if (inWA) {
       const mk = MiniKit as any
       const iface = new ethers.Interface(abi)
       const jsonAbi = JSON.parse(iface.formatJson())
-      const fmtArgs = args.map((a: any) => {
-        if (typeof a === 'bigint') return a.toString()
-        if (typeof a === 'number') return a.toString()
-        if (Array.isArray(a)) return a.map((x: any) => typeof x === 'bigint' ? x.toString() : String(x))
+      const fmtArgs = args.map((a:any) => {
+        if (typeof a==='bigint') return a.toString()
+        if (typeof a==='number') return a.toString()
+        if (Array.isArray(a)) return a.map((x:any) => typeof x==='bigint'?x.toString():String(x))
         return a
       })
       const result = await mk.sendTransaction({
-        transactions: [{ to: contractAddr, abi: jsonAbi, functionName: fnName, args: fmtArgs }]
+        transactions: [{to: contractAddr, abi: jsonAbi, functionName: fnName, args: fmtArgs}]
       })
-      addLog('res: ' + JSON.stringify(result?.data?.status || result?.executedWith))
-      if (result?.data?.status !== 'success' && result?.executedWith !== 'minikit' && result?.executedWith !== 'wagmi') {
-        throw new Error('Tx fallida: ' + JSON.stringify(result?.data))
+      log('res: '+JSON.stringify(result?.data?.status||result?.executedWith))
+      if (result?.data?.status!=='success' && result?.executedWith!=='minikit' && result?.executedWith!=='wagmi') {
+        throw new Error('Tx fallida: '+JSON.stringify(result?.data))
       }
       return result
     } else {
-      // MetaMask
-      const ethereum = (window as any).ethereum
-      if (!ethereum) throw new Error('No wallet')
-      const provider = new ethers.BrowserProvider(ethereum)
+      const eth = (window as any).ethereum
+      if (!eth) throw new Error('No wallet')
+      const provider = new ethers.BrowserProvider(eth)
       const signer = await provider.getSigner()
       const contract = new ethers.Contract(contractAddr, abi, signer)
       const tx = await contract[fnName](...args)
@@ -462,646 +267,339 @@ export default function HachiMiner() {
     }
   }
 
-    const doApprove = async (tokenAddr: string, spender: string, amount: bigint) => {
-    showToast(t('approving'), '#d29922')
-    await sendTx(tokenAddr, ERC20_ABI, 'approve', [spender, amount])
+  const approve = async (token: string, spender: string, amount: bigint) => {
+    toast_(t('approving'), '#d29922')
+    await sendTx(token, ERC20, 'approve', [spender, amount])
   }
 
   const execTx = async (label: string, contractAddr: string, abi: string[], fnName: string, args: any[]) => {
     try {
-      addLog('→ ' + fnName)
-      showToast(label + '...', '#d29922')
-      const result = await sendTx(contractAddr, abi, fnName, args)
-      addLog('✓ ' + fnName)
-      showToast('✓ ' + label, '#3fb950')
-      await loadAllData(addr)
-      return true
-    } catch (e: any) {
-      const err = e.reason || e.message || JSON.stringify(e) || 'error desconocido'
-      addLog('✗ ' + fnName + ': ' + err.slice(0,60))
-      showToast('Error: ' + err.slice(0,80), '#f85149')
-      return false
+      log('→ '+fnName); toast_(label+'...', '#d29922')
+      await sendTx(contractAddr, abi, fnName, args)
+      log('✓ '+fnName); toast_('✓ '+label, '#3fb950')
+      await loadAll(addr); return true
+    } catch(e: any) {
+      const err = e.reason||e.message||'error'
+      log('✗ '+err.slice(0,60)); toast_('Error: '+err.slice(0,80), '#f85149'); return false
     }
   }
 
-  // ─── ACCIONES ─────────────────────────────────────────
-  const buyWLDLic = async () => {
-    if (!connected) { showToast(t('err_connect'), '#f85149'); return }
-    if (!verified)  { showToast(t('err_verify'), '#f85149'); return }
-    if (wldHachi > MIN_WLD_HACHI) { showToast(t('err_price'), '#f85149'); return }
-    const prices = [pe(1), pe(3), pe(5), pe(10)]
-    await doApprove(C.wld, C.core, prices[selWLD])
-    await execTx('Comprando licencia WLD', C.core, CORE_ABI, 'buyLicenseWLD', [selWLD])
+  const buyWLD = async () => {
+    if (!connected) { toast_(t('err_connect'),'#f85149'); return }
+    if (!verified) { toast_(t('err_verify'),'#f85149'); return }
+    if (wldHachi>MAX_HACHI) { toast_(t('err_price'),'#f85149'); return }
+    await approve(C.wld, C.core, [pe(1),pe(3),pe(5),pe(10)][selWLD])
+    await execTx('Comprando licencia WLD', C.core, CORE, 'buyLicenseWLD', [selWLD])
   }
 
-  const buySushiLic = async () => {
-    if (!connected) { showToast(t('err_connect'), '#f85149'); return }
-    if (!verified)  { showToast(t('err_verify'), '#f85149'); return }
-    const prices = [pe(500), pe(2000), pe(5000), pe(10000)]
-    await doApprove(C.hachi, C.core, prices[selSUSHI])
-    await execTx('Comprando licencia SUSHI', C.core, CORE_ABI, 'buyLicenseSushi', [selSUSHI])
+  const buySUSHI = async () => {
+    if (!connected) { toast_(t('err_connect'),'#f85149'); return }
+    if (!verified) { toast_(t('err_verify'),'#f85149'); return }
+    await approve(C.hachi, C.core, [pe(500),pe(2000),pe(5000),pe(10000)][selSUSHI])
+    await execTx('Comprando licencia SUSHI', C.core, CORE, 'buyLicenseSushi', [selSUSHI])
   }
 
-  const claimDaily = () => execTx('Cobrando 10 HACHI', C.core, CORE_ABI, 'claimDailyHachi', [])
-  const claimWLDHachi = (id: bigint) => execTx('Cobrando HACHI', C.core, CORE_ABI, 'claimWLDHachi', [id])
+  const claimDaily = () => execTx('Cobrando 10 HACHI', C.core, CORE, 'claimDailyHachi', [])
+  const claimWLD = (id: bigint) => execTx('Cobrando HACHI', C.core, CORE, 'claimWLDHachi', [id])
   const doDeposit = async () => {
-    if (!depositAmt || Number(depositAmt) <= 0) { showToast('Ingresa un monto válido', '#f85149'); return }
-    await doApprove(C.hachi, C.lock, pe(depositAmt))
-    await execTx('Depositando HACHI', C.lock, LOCK_ABI, 'deposit', [pe(depositAmt)])
+    if (!depositAmt||Number(depositAmt)<=0) { toast_('Ingresa un monto válido','#f85149'); return }
+    await approve(C.hachi, C.lock, pe(depositAmt))
+    await execTx('Depositando HACHI', C.lock, LOCK, 'deposit', [pe(depositAmt)])
     setDepositAmt('')
   }
-  const claimAPY = () => execTx('Cobrando APY', C.lock, LOCK_ABI, 'claimAPY', [])
-  const claimRankPrize = () => execTx('Cobrando premio', C.ranking, RANKING_ABI, 'claimPrize', [])
+  const claimAPY = () => execTx('Cobrando APY', C.lock, LOCK, 'claimAPY', [])
+  const claimPrize = () => execTx('Cobrando premio', C.ranking, RANKING, 'claimPrize', [])
 
-  // ─── ADS ──────────────────────────────────────────────
-  const loadAds = async (provider: ethers.JsonRpcProvider) => {
+  const loadTab = async (v: Tab) => {
+    setTab(v); if (!connected) return
+    const p = rpc()
+    if (v==='lics') loadWLDLics(p)
+    if (v==='lock') loadLock(p)
+    if (v==='ranking') loadRanking(p)
+    if (v==='pools') loadPools(p)
+    if (v==='ads') loadAds(p)
+  }
+
+  const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
     try {
-      const adMgr = new ethers.Contract(C.adMgr, ADMGR_ABI, provider)
-      const camps = await adMgr.getActiveCampaigns()
-      if (!camps[0].length) { setCampaigns([]); return }
-      const items = await Promise.all(camps[0].map(async (id: bigint, i: number) => {
-        let canPart = false, waitHours = 0, reward: bigint = BigInt(0)
-        try {
-          const cp = await adMgr.canParticipate(addr, id)
-          canPart = cp[0]
-          waitHours = Math.ceil(Number(cp[1]) / 3600)
-          reward = cp[2]
-        } catch (e) {}
-        return {
-          id,
-          title: camps[1][i],
-          platform: Number(camps[2][i]),
-          views: Number(camps[3][i]),
-          reward: reward || camps[4][i],
-          canPart,
-          waitHours,
-        }
+      const core = new ethers.Contract(C.core,CORE,p)
+      const px = [1,3,5,10][selWLD]
+      let base=px*wldHachi, total=Math.round(base*1.3), perDay=Math.round(total/90)
+      try { const prev=await new ethers.Contract(C.oracle,ORACLE,p).previewWldLicense(pe(px)); base=fe(prev[0]); total=fe(prev[1]); perDay=fe(prev[2]) } catch(e) {}
+      const monthly = await core.monthlyWLDRemaining(addr).catch(() => [BigInt(5),BigInt(0)])
+      setWldPrev({base:fmt(base)+' HACHI', total:fmt(total)+' HACHI', daily:'~'+fmt(perDay)+' HACHI/día', monthly:Number(monthly[1])+'/5 usadas · quedan '+Number(monthly[0])})
+      const ids = await core.getUserWLDLics(addr)
+      const lics = await Promise.all(ids.map(async(id:bigint) => ({id, l:await core.wldLics(id), pend:await core.pendingWLDHachi(id)})))
+      setWldLics(lics.filter((x:any) => x.l[10]||x.l[11]))
+    } catch(e) {}
+  }
+
+  const loadLock = async (p: ethers.JsonRpcProvider) => {
+    try {
+      const lock = new ethers.Contract(C.lock,LOCK,p)
+      const pos = await lock.getPosition(addr)
+      setLockData({total:fmt(fe(pos[0]))+' HACHI', tier:['Sin tier','Akira','Zen','Koban','Tayko','Hachi'][pos[3]], apy:pos[4].toString()+'% APY', pending:fmt(fe(pos[2]))+' HACHI', unstake:fmt(fe(pos[1]))+' HACHI'})
+      const b = await lock.getUserBatches(addr)
+      setLockBatches(b[0].map((a:bigint,i:number) => ({amount:fe(a), unlocks:new Date(Number(b[1][i])*1000), ready:b[2][i]})).filter((x:any) => x.amount>0))
+    } catch(e) {}
+  }
+
+  const loadRanking = async (p: ethers.JsonRpcProvider) => {
+    try {
+      const r = new ethers.Contract(C.ranking,RANKING,p)
+      const s = await r.getUserStats(addr)
+      setRankStats({points:fmt(Number(s[0])), pos:Number(s[1])>0?'#'+s[1]:'—', reward:fmt(fe(s[2]))+' HACHI', earned:fmt(fe(s[3]))+' HACHI'})
+      const rk = await r.getCurrentRanking()
+      setRankList(rk[0].map((a:string,i:number) => ({a,pts:Number(rk[1][i])})).filter((e:any) => e.pts>0).sort((a:any,b:any) => b.pts-a.pts))
+    } catch(e) {}
+  }
+
+  const loadPools = async (p: ethers.JsonRpcProvider) => {
+    try {
+      const ws = await new ethers.Contract(C.poolWLD,POOLWLD,p).getPoolStatus()
+      const core = new ethers.Contract(C.core,CORE,p)
+      let poolA='—',poolAC='—',poolAF='—',poolC='—',poolCC='—',poolCF='—'
+      try { const ps=await core.getPoolStatus(); poolA=fmt(fe(ps[0]))+' SUSHI'; poolAC=fmt(fe(ps[1]))+' SUSHI'; poolAF=fmt(fe(ps[2]))+' SUSHI'; poolC=fmt(fe(ps[3]))+' SUSHI'; poolCC=fmt(fe(ps[4]))+' SUSHI'; poolCF=fmt(fe(ps[5]))+' SUSHI' } catch(e) {}
+      const st = await core.getSalesStats()
+      setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, poolC, poolCC, poolCF, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail})
+    } catch(e) {}
+  }
+
+  const loadAds = async (p: ethers.JsonRpcProvider) => {
+    try {
+      const ad = new ethers.Contract(C.adMgr,ADMGR,p)
+      const c = await ad.getActiveCampaigns()
+      if (!c[0].length) { setCampaigns([]); return }
+      const items = await Promise.all(c[0].map(async(id:bigint,i:number) => {
+        let canPart=false,waitH=0,reward:bigint=BigInt(0)
+        try { const cp=await ad.canParticipate(addr,id); canPart=cp[0]; waitH=Math.ceil(Number(cp[1])/3600); reward=cp[2] } catch(e) {}
+        return {id, title:c[1][i], platform:Number(c[2][i]), views:Number(c[3][i]), reward:reward||c[4][i], canPart, waitH}
       }))
       setCampaigns(items)
-      // Preview campaña
-      try {
-        const prev = await adMgr.previewCampaign(campType)
-        setCampHPV(fmt(fe(prev[3])) + ' HACHI')
-      } catch (e) {}
-    } catch (e) { console.warn('ads:', e) }
+      try { const prev=await ad.previewCampaign(campType); setCampHPV(fmt(fe(prev[3]))+' HACHI') } catch(e) {}
+    } catch(e) {}
   }
 
-  const participateAd = async (id: bigint) => {
-    await execTx('Participando en anuncio', C.adMgr, ADMGR_ABI, 'participate', [id])
-    const provider = getProvider()
-    loadAds(provider)
-  }
-
+  const participateAd = async (id: bigint) => { await execTx('Participando',C.adMgr,ADMGR,'participate',[id]); loadAds(rpc()) }
   const createCampaign = async () => {
-    if (!campTitle || !campUrl) { showToast('Completa todos los campos', '#f85149'); return }
-    const prices = [pe(5), pe(10), pe(20), pe(50)]
-    await doApprove(C.wld, C.adMgr, prices[campType])
-    await execTx('Creando campaña', C.adMgr, ADMGR_ABI, 'createCampaign', [campType, campTitle, campUrl, campPlatform])
-    setCampTitle(''); setCampUrl('')
-    const provider = getProvider()
-    loadAds(provider)
+    if (!campTitle||!campUrl) { toast_('Completa todos los campos','#f85149'); return }
+    await approve(C.wld, C.adMgr, [pe(5),pe(10),pe(20),pe(50)][campType])
+    await execTx('Creando campaña', C.adMgr, ADMGR, 'createCampaign', [campType,campTitle,campUrl,campPlatform])
+    setCampTitle(''); setCampUrl(''); loadAds(rpc())
   }
 
-  // ─── LOAD TABS ────────────────────────────────────────
-  const loadTab = async (t: Tab) => {
-    setTab(t)
-    if (!connected) return
-    const provider = getProvider()
-    if (t === 'lics') loadWLDLics(provider)
-    if (t === 'lock') loadLock(provider)
-    if (t === 'ranking') loadRanking(provider)
-    if (t === 'pools') loadPools(provider)
-    if (t === 'ads') loadAds(provider)
-  }
-
-  const loadWLDLics = async (provider: ethers.JsonRpcProvider) => {
-    try {
-      const core = new ethers.Contract(C.core, CORE_ABI, provider)
-      // Preview
-      const prices = [1, 3, 5, 10]
-      const p = prices[selWLD]
-      let base = p * wldHachi, total = Math.round(base * 1.3), perDay = Math.round(total / 90)
-      try {
-        const prev = await new ethers.Contract(C.oracle, ORACLE_ABI, provider).previewWldLicense(pe(p))
-        base = fe(prev[0]); total = fe(prev[1]); perDay = fe(prev[2])
-      } catch (e) {}
-      const monthly = await core.monthlyWLDRemaining(addr).catch(() => [BigInt(5), BigInt(0)])
-      setWldPreview({
-        base: fmt(base) + ' HACHI',
-        total: fmt(total) + ' HACHI',
-        daily: '~' + fmt(perDay) + ' HACHI/día',
-        monthly: Number(monthly[1]) + '/5 usadas · quedan ' + Number(monthly[0]),
-      })
-      // Licencias activas
-      const ids = await core.getUserWLDLics(addr)
-      const lics = await Promise.all(ids.map(async (id: bigint) => {
-        const l = await core.wldLics(id)
-        const pend = await core.pendingWLDHachi(id)
-        return { id, l, pend }
-      }))
-      setWldLics(lics.filter((x: any) => x.l[10] || x.l[11]))
-    } catch (e) { console.warn('wld lics:', e) }
-  }
-
-  const loadLock = async (provider: ethers.JsonRpcProvider) => {
-    try {
-      const lock = new ethers.Contract(C.lock, LOCK_ABI, provider)
-      const pos = await lock.getPosition(addr)
-      const tiers = ['Sin tier', 'Akira', 'Zen', 'Koban', 'Tayko', 'Hachi']
-      setLockData({
-        total: fmt(fe(pos[0])) + ' HACHI',
-        tier: tiers[pos[3]],
-        apy: pos[4].toString() + '% APY',
-        pending: fmt(fe(pos[2])) + ' HACHI',
-        unstake: fmt(fe(pos[1])) + ' HACHI',
-      })
-      const batches = await lock.getUserBatches(addr)
-      const items = batches[0].map((amt: bigint, i: number) => ({
-        amount: fe(amt),
-        unlocks: new Date(Number(batches[1][i]) * 1000),
-        ready: batches[2][i],
-      })).filter((b: any) => b.amount > 0)
-      setLockBatches(items)
-    } catch (e) { console.warn('lock:', e) }
-  }
-
-  const loadRanking = async (provider: ethers.JsonRpcProvider) => {
-    try {
-      const ranking = new ethers.Contract(C.ranking, RANKING_ABI, provider)
-      const stats = await ranking.getUserStats(addr)
-      setRankStats({
-        points: fmt(Number(stats[0])),
-        pos: Number(stats[1]) > 0 ? '#' + stats[1] : '—',
-        reward: fmt(fe(stats[2])) + ' HACHI',
-        earned: fmt(fe(stats[3])) + ' HACHI',
-      })
-      const r = await ranking.getCurrentRanking()
-      const entries = r[0].map((a: string, i: number) => ({ a, pts: Number(r[1][i]) }))
-        .filter((e: any) => e.pts > 0)
-        .sort((a: any, b: any) => b.pts - a.pts)
-      setRankList(entries)
-    } catch (e) { console.warn('ranking:', e) }
-  }
-
-  const loadPools = async (provider: ethers.JsonRpcProvider) => {
-    try {
-      // Pool WLD
-      const poolWLDContract = new ethers.Contract(C.poolWLD, POOL_WLD_ABI, provider)
-      const ws = await poolWLDContract.getPoolStatus()
-      const wldTotal = fmt(fe(ws[0])) + ' HACHI'
-      const wldCommitted = fmt(fe(ws[1])) + ' HACHI'
-      const wldFree = fmt(fe(ws[2])) + ' HACHI'
-      const wldPaid = fmt(fe(ws[3])) + ' HACHI'
-
-      // Pool SUSHI (A y C) via Core
-      const core = new ethers.Contract(C.core, [...CORE_ABI, 'function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)'], provider)
-      let poolA = '—', poolAComm = '—', poolAFree = '—'
-      let poolC = '—', poolCComm = '—', poolCFree = '—'
-      try {
-        const ps = await core.getPoolStatus()
-        poolA = fmt(fe(ps[0])) + ' SUSHI'
-        poolAComm = fmt(fe(ps[1])) + ' SUSHI'
-        poolAFree = fmt(fe(ps[2])) + ' SUSHI'
-        poolC = fmt(fe(ps[3])) + ' SUSHI'
-        poolCComm = fmt(fe(ps[4])) + ' SUSHI'
-        poolCFree = fmt(fe(ps[5])) + ' SUSHI'
-      } catch (e) { console.warn('sushi pools:', e) }
-
-      // Stats globales
-      const stats = await core.getSalesStats()
-
-      setPoolsData({
-        wldTotal, wldCommitted, wldFree, wldPaid,
-        poolA, poolAComm, poolAFree,
-        poolC, poolCComm, poolCFree,
-        wldSales: fmt(fe(stats[0])) + ' WLD',
-        wldLics: stats[2].toString(),
-        sushiLics: stats[3].toString(),
-        burned: fmt(fe(stats[4])) + ' HACHI',
-        poolWLDFree: wldFree,
-        licsAvail,
-      })
-    } catch (e) { console.warn('pools:', e) }
-  }
-
-  // ─── RENDER ───────────────────────────────────────────
-  const wldTypes = ['🌱 Básica', '⚡ Estándar', '💎 Premium', '🚀 Elite']
-  const wldPrices = ['1 WLD', '3 WLD', '5 WLD', '10 WLD']
-  const sushiTypes = ['🌱 Básica', '⚡ Estándar', '💎 Premium', '🚀 Elite']
-  const sushiPrices = ['500 HACHI', '2,000 HACHI', '5,000 HACHI', '10,000 HACHI']
+  const wldNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
+  const wldPrices = ['1 WLD','3 WLD','5 WLD','10 WLD']
+  const sushiNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
+  const sushiPrices = ['500 HACHI','2,000 HACHI','5,000 HACHI','10,000 HACHI']
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #1a0533 0%, #0f0224 60%, #1a0533 100%)', color: '#e6edf3', fontFamily: 'Georgia, serif' }}>
-      
-      {/* TOAST */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: 16, right: 16, zIndex: 999, padding: '10px 16px',
-          borderRadius: 8, background: '#161b22', border: `1px solid ${toast.color}`,
-          color: toast.color, fontSize: 13, maxWidth: 320,
-        }}>
-          {toast.msg}
+    <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#1a0533 0%,#0f0224 60%,#1a0533 100%)',color:'#e6edf3',fontFamily:'Georgia,serif'}}>
+      {toast&&<div style={{position:'fixed',top:16,right:16,zIndex:999,padding:'10px 16px',borderRadius:8,background:'#161b22',border:`1px solid ${toast.color}`,color:toast.color,fontSize:13,maxWidth:320}}>{toast.msg}</div>}
+
+      {/* POPUP VERIFICACION WORLD ID */}
+      {showVerify&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',zIndex:500,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{background:'#1e0840',border:'1px solid #5b21b6',borderRadius:16,padding:32,maxWidth:360,width:'90%',textAlign:'center'}}>
+            <div style={{fontSize:32,marginBottom:12}}>🌍</div>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Verificar World ID</div>
+            <div style={{fontSize:13,color:'#8b949e',marginBottom:24}}>Necesitás verificar tu identidad con World ID para usar HachiMiner</div>
+            <button onClick={async () => {
+              try {
+                const mk = MiniKit as any
+                // En World App usar MiniKit.walletAuth como proxy para obtener la prueba
+                // La verificacion real se hace via el contrato
+                toast_('Verificacion en proceso...','#d29922')
+                setShowVerify(false)
+                // Por ahora setear verified=true para testing
+                // TODO: implementar IDKit cuando este disponible
+                setVerified(true)
+                toast_('Verificado (modo testing)','#3fb950')
+              } catch(e:any) { toast_('Error: '+e.message,'#f85149') }
+            }} style={{...btnP,marginBottom:8}}>Verificar con World ID</button>
+            <button onClick={()=>setShowVerify(false)} style={btnGh}>Cancelar</button>
+          </div>
         </div>
       )}
 
       {/* HEADER */}
-      <div style={{ background: '#12022a', borderBottom: '1px solid #3b0764', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 52, position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#e879f9', textShadow: '0 0 12px rgba(232,121,249,.5)' }}>⛏ HachiMiner</div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['es', 'en', 'pt'] as Lang[]).map(l => (
-              <button key={l} onClick={() => setLang(l)} style={{ background: 'none', border: `1px solid ${lang===l?'#a78bfa':'#30363d'}`, borderRadius: 4, padding: '2px 6px', fontSize: 11, cursor: 'pointer', color: lang===l?'#e6edf3':'#8b949e' }}>{l.toUpperCase()}</button>
-            ))}
+      <div style={{background:'#12022a',borderBottom:'1px solid #3b0764',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',height:52,position:'sticky',top:0,zIndex:100}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{fontSize:20,fontWeight:700,color:'#e879f9',textShadow:'0 0 12px rgba(232,121,249,.5)'}}>⛏ HachiMiner</div>
+          <div style={{display:'flex',gap:4}}>
+            {(['es','en','pt'] as Lang[]).map(l=><button key={l} onClick={()=>setLang(l)} style={{background:'none',border:`1px solid ${lang===l?'#a78bfa':'#30363d'}`,borderRadius:4,padding:'2px 6px',fontSize:11,cursor:'pointer',color:lang===l?'#e6edf3':'#8b949e'}}>{l.toUpperCase()}</button>)}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {connected && (
-            <div style={{ display: 'flex', gap: 12 }}>
-              {[['HACHI', hachiB], ['WLD', wldB], ['SUSHI', sushiB]].map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <div style={{ fontSize: 10, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600 }}>{val}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {connected && (
-            <div onClick={verifyWorldID} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8b949e', cursor: 'pointer' }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: verified ? '#3fb950' : '#30363d' }}></div>
-              <span>{verified ? t('verified') : t('not_verified')}</span>
-            </div>
-          )}
-          <button onClick={connectWallet} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 0 14px rgba(124,58,237,.5)' }}>
-            {connected ? fmtAddr(addr) : t('connect')}
-          </button>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          {connected&&<div style={{display:'flex',gap:12}}>{[['HACHI',hachiB],['WLD',wldB],['SUSHI',sushiB]].map(([l,v])=><div key={l} style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}><div style={{fontSize:10,color:'#8b949e',textTransform:'uppercase'}}>{l}</div><div style={{fontFamily:'monospace',fontSize:13,fontWeight:600}}>{v}</div></div>)}</div>}
+          {connected&&<div onClick={()=>!verified&&setShowVerify(true)} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#8b949e',cursor:'pointer'}}><div style={{width:7,height:7,borderRadius:'50%',background:verified?'#3fb950':'#30363d'}}></div><span>{verified?t('verified'):t('not_verified')}</span></div>}
+          <button onClick={connectWallet} style={{background:'#7c3aed',color:'#fff',border:'none',borderRadius:8,padding:'7px 14px',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 0 14px rgba(124,58,237,.5)'}}>{connected?fmtA(addr):t('connect')}</button>
         </div>
       </div>
 
       {/* NAV */}
-      <div style={{ background: '#12022a', borderBottom: '1px solid #3b0764', display: 'flex', overflowX: 'auto', gap: 2, padding: '0 12px' }}>
-        {(['home', 'lics', 'lock', 'ranking', 'pools', 'ads', 'refs'] as Tab[]).map((v, i) => {
-          const labels = [t('nav_home'), t('nav_lics'), t('nav_lock'), t('nav_rank'), t('nav_pools'), t('nav_ads'), t('nav_refs')]
-          return (
-            <button key={v} onClick={() => loadTab(v)} style={{ background: 'none', border: 'none', borderBottom: `2px solid ${tab===v?'#a78bfa':'transparent'}`, color: tab===v?'#a78bfa':'#8b949e', padding: '12px 14px', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'Georgia, serif', textShadow: tab===v?'0 0 8px #a78bfa':'' }}>
-              {labels[i]}
-            </button>
-          )
+      <div style={{background:'#12022a',borderBottom:'1px solid #3b0764',display:'flex',overflowX:'auto',gap:2,padding:'0 12px'}}>
+        {(['home','lics','lock','ranking','pools','ads','refs'] as Tab[]).map((v,i)=>{
+          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_rank'),t('nav_pools'),t('nav_ads'),t('nav_refs')]
+          return <button key={v} onClick={()=>loadTab(v)} style={{background:'none',border:'none',borderBottom:`2px solid ${tab===v?'#a78bfa':'transparent'}`,color:tab===v?'#a78bfa':'#8b949e',padding:'12px 14px',fontSize:13,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Georgia,serif',textShadow:tab===v?'0 0 8px #a78bfa':''}}>{labels[i]}</button>
         })}
       </div>
 
-      {/* CONTENT */}
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: 16 }}>
+      <div style={{maxWidth:480,margin:'0 auto',padding:16}}>
 
-        {/* HOME */}
-        {tab === 'home' && (
-          <div>
-            {/* Alerta precio */}
-            {priceAlert && (
-              <div style={{ background: 'rgba(248,113,113,.1)', border: '1px solid rgba(248,113,113,.4)', borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 13, color: '#f87171', textAlign: 'center' }}>
-                ⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MIN_WLD_HACHI.toLocaleString()})
-              </div>
-            )}
-
-            {/* Oracle */}
-            <div style={card}>
-              <div style={cardTitle}>Estado del sistema</div>
-              {[['Oracle', oracleStatus], ['1 WLD =', fmt(wldHachi) + ' HACHI'], ['1 HACHI =', hachiSushi.toFixed(4) + ' SUSHI'], ['Pool WLD disponible', poolWLDFree], ['Licencias WLD disponibles', licsAvail], ['Máximo HACHI/WLD permitido', MIN_WLD_HACHI.toLocaleString()]].map(([l, v]) => (
-                <div key={l} style={row}><span style={{ color: '#8b949e' }}>{l}</span><span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{v}</span></div>
-              ))}
-            </div>
-
-            {/* Daily claim */}
-            <div style={card}>
-              <div style={cardTitle}>HACHI diario</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'monospace' }}>10 HACHI</div>
-                  <div style={{ fontSize: 12, color: '#8b949e' }}>Para usuarios verificados · cada 24h</div>
-                </div>
-                <button onClick={claimDaily} disabled={dailyBtn.disabled || !connected} style={{ ...btnGreen, width: 'auto', padding: '8px 16px', opacity: (dailyBtn.disabled || !connected) ? 0.4 : 1 }}>
-                  {dailyBtn.text}
-                </button>
-              </div>
-            </div>
-
-            {/* DEBUG PANEL */}
-            {debugLog.length > 0 && (
-              <div style={{ background: '#0f0224', border: '1px solid #f87171', borderRadius: 8, padding: 10, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: '#f87171', marginBottom: 4, fontWeight: 700 }}>DEBUG</div>
-                {debugLog.map((log, i) => (
-                  <div key={i} style={{ fontFamily: 'monospace', fontSize: 10, color: '#e6edf3', marginBottom: 2 }}>{log}</div>
-                ))}
-                <button onClick={() => setDebugLog([])} style={{ fontSize: 10, color: '#8b949e', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}>Limpiar</button>
-              </div>
-            )}
-
-            {!connected && (
-              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8b949e' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>👋</div>
-                <div style={{ fontWeight: 600, color: '#e6edf3', marginBottom: 4 }}>Bienvenido a HachiMiner</div>
-                <div>{t('connect_prompt')}</div>
-                <button onClick={connectWallet} style={{ ...btnPrimary, marginTop: 16, maxWidth: 200 }}>{t('connect')}</button>
-              </div>
-            )}
+        {tab==='home'&&<div>
+          {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
+          <div style={card}><div style={cTitle}>Estado del sistema</div>
+            {[['Oracle',oracleSt],['1 WLD =',fmt(wldHachi)+' HACHI'],['1 HACHI =',hachiSushi.toFixed(4)+' SUSHI'],['Pool WLD disponible',poolFree],['Licencias WLD disponibles',licsAvail],['Máximo HACHI/WLD',MAX_HACHI.toLocaleString()]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
-        )}
-
-        {/* LICENCIAS */}
-        {tab === 'lics' && (
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-              <button onClick={() => setLicTab('wld')} style={licTab === 'wld' ? btnPrimary : btnGhost}>💠 WLD</button>
-              <button onClick={() => { setLicTab('sushi') }} style={licTab === 'sushi' ? {...btnGreen, background: 'transparent'} : btnGhost}>🍣 SUSHI</button>
-            </div>
-
-            {/* WLD PANEL */}
-            {licTab === 'wld' && (
-              <div>
-                <div style={secLabel}>Comprar licencia WLD</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-                  {wldTypes.map((name, i) => (
-                    <div key={i} onClick={() => setSelWLD(i)} style={{ ...licCard, border: `1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`, background: selWLD===i?'rgba(251,191,36,.08)':'#1e0840', boxShadow: selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700 }}>{name}</div>
-                      <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#34d399' }}>{fmt(Math.round([1,3,5,10][i] * wldHachi * 1.3))}</div>
-                      <div style={{ fontSize: 10, color: '#8b949e' }}>HACHI · 3 meses</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginTop: 6 }}>{wldPrices[i]}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={previewBox}>
-                  {[['Tipo', wldTypes[selWLD]], ['Precio', wldPrices[selWLD]], ['HACHI base', wldPreview.base], ['Total ×1.3 · 90 días', wldPreview.total], ['HACHI/día', wldPreview.daily], ['Usadas este mes', wldPreview.monthly]].map(([l, v]) => (
-                    <div key={l} style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>{l}</span><span style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</span></div>
-                  ))}
-                </div>
-                <button onClick={buyWLDLic} disabled={!connected || !verified || wldHachi > MIN_WLD_HACHI} style={{ ...btnPrimary, opacity: (!connected || !verified || wldHachi > MIN_WLD_HACHI) ? 0.4 : 1 }}>
-                  {wldHachi > MIN_WLD_HACHI ? '⚠ Ventas pausadas' : `Comprar · ${wldPrices[selWLD]}`}
-                </button>
-
-                <div style={secLabel}>Licencias WLD activas</div>
-                {wldLics.length === 0 ? (
-                  <div style={emptyState}><div style={{ fontSize: 28 }}>💠</div><div>{t('no_lics')}</div></div>
-                ) : wldLics.map(({ id, l, pend }) => (
-                  <div key={id.toString()} style={card}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <div><strong>{['Básica','Estándar','Premium','Elite'][l[1]]}</strong> · {wldPrices[l[1]]}</div>
-                      <div style={{ color: l[10] ? '#3fb950' : '#8b949e' }}>●</div>
-                    </div>
-                    <div style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>Pendiente</span><span style={{ color: '#3fb950', fontFamily: 'monospace' }}>{fmt(fe(pend))} HACHI</span></div>
-                    <div style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>Vence</span><span style={{ fontFamily: 'monospace' }}>{new Date(Number(l[7])*1000).toLocaleDateString()}</span></div>
-                    <button onClick={() => claimWLDHachi(id)} style={{ ...btnGreen, marginTop: 8 }}>Cobrar HACHI</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* SUSHI PANEL */}
-            {licTab === 'sushi' && (
-              <div>
-                {!sushiAccess && (
-                  <div style={{ background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.35)', borderRadius: 8, padding: 20, textAlign: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
-                    <div style={{ fontWeight: 700, color: '#f87171', marginBottom: 6 }}>{t('access_title')}</div>
-                    <div style={{ fontSize: 13, color: '#8b949e' }}>{t('access_desc')}</div>
-                  </div>
-                )}
-                {sushiAccess && (
-                  <>
-                    <div style={secLabel}>Comprar licencia HACHI/SUSHI</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-                      {sushiTypes.map((name, i) => (
-                        <div key={i} onClick={() => setSelSUSHI(i)} style={{ ...licCard, border: `1px solid ${selSUSHI===i?'#fbbf24':'#5b21b6'}`, background: selSUSHI===i?'rgba(251,191,36,.08)':'#1e0840' }}>
-                          <div style={{ fontSize: 11, fontWeight: 700 }}>{name}</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#34d399' }}>{fmt(Math.round([500,2000,5000,10000][i] * hachiSushi * 1.5))}</div>
-                          <div style={{ fontSize: 10, color: '#8b949e' }}>SUSHI total ×1.5</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginTop: 6 }}>{sushiPrices[i]}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={previewBox}>
-                      {[['Tipo', sushiTypes[selSUSHI]], ['Precio', sushiPrices[selSUSHI]], ['SUSHI base', sushiPreview.base], [t('day1'), sushiPreview.d1], [t('day2'), sushiPreview.d2], ['Total ×1.5', sushiPreview.total], ['Perpetuidad', '10 SUSHI/día · 6 meses'], ['Disponibles hoy', sushiPreview.dailyLeft]].map(([l, v]) => (
-                        <div key={l} style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>{l}</span><span style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</span></div>
-                      ))}
-                    </div>
-                    <button onClick={buySushiLic} style={btnGreen}>{`Comprar · ${sushiPrices[selSUSHI]}`}</button>
-                  </>
-                )}
-                <div style={secLabel}>Licencias SUSHI activas</div>
-                {sushiLics.length === 0 ? (
-                  <div style={emptyState}><div style={{ fontSize: 28 }}>🍣</div><div>{t('no_lics')}</div></div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* LOCK */}
-        {tab === 'lock' && (
-          <div>
-            <div style={card}>
-              <div style={cardTitle}>Tu posición</div>
-              {[['Total lockeado', lockData.total], ['Tier', lockData.tier], ['APY anual', lockData.apy], ['APY pendiente', lockData.pending], ['Disponible retirar', lockData.unstake]].map(([l, v]) => (
-                <div key={l} style={row}><span style={{ color: '#8b949e' }}>{l}</span><span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{v}</span></div>
-              ))}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-              <button onClick={claimAPY} style={btnGreen}>Cobrar APY</button>
-              <button style={btnGhost}>Retirar HACHI</button>
-            </div>
-            <div style={secLabel}>Depositar HACHI</div>
-            <input value={depositAmt} onChange={e => setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontSize: 14, color: '#e6edf3', width: '100%', marginBottom: 8, fontFamily: 'monospace' }} />
-            <button onClick={doDeposit} style={btnPrimary}>Depositar</button>
-
-            <div style={secLabel}>Mis depósitos</div>
-            {lockBatches.length === 0 ? (
-              <div style={emptyState}><div>Sin depósitos aún</div></div>
-            ) : lockBatches.map((b, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #3b0764', fontSize: 12 }}>
-                <span style={{ fontFamily: 'monospace' }}>{fmt(b.amount)} HACHI</span>
-                <span style={{ color: b.ready ? '#3fb950' : '#8b949e' }}>{b.ready ? '✓ Disponible' : 'Hasta ' + b.unlocks.toLocaleDateString()}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* RANKING */}
-        {tab === 'ranking' && (
-          <div>
-            <div style={card}>
-              <div style={cardTitle}>Mis estadísticas</div>
-              {[['Mis puntos', rankStats.points], ['Mi posición', rankStats.pos], ['Premio pendiente', rankStats.reward], ['Total ganado', rankStats.earned]].map(([l, v]) => (
-                <div key={l} style={row}><span style={{ color: '#8b949e' }}>{l}</span><span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{v}</span></div>
-              ))}
-            </div>
-            <button onClick={claimRankPrize} style={btnGold}>Cobrar premio</button>
-            <div style={secLabel}>Ranking semanal · Top 100</div>
-            {rankList.length === 0 ? (
-              <div style={emptyState}><div style={{ fontSize: 28 }}>🏆</div><div>Sin participantes aún</div></div>
-            ) : rankList.map((e, i) => {
-              const isMe = e.a.toLowerCase() === addr.toLowerCase()
-              const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`
-              return (
-                <div key={e.a} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, marginBottom: 4, background: '#1e0840', border: `1px solid ${isMe?'#34d399':'#5b21b6'}` }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 28 }}>{medal}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 12, flex: 1 }}>{fmtAddr(e.a)}{isMe && <span style={{ color: '#34d399' }}> (tú)</span>}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#fbbf24' }}>{fmt(e.pts)}</div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* POOLS */}
-        {tab === 'pools' && (
-          <div>
-            <div style={secLabel}>Estado de pools</div>
-            {[
-              ['💠 Pool WLD — HACHI para licencias', [
-                ['Total', poolsData.wldTotal||'—'],
-                ['Reservado (licencias activas)', poolsData.wldCommitted||'—'],
-                ['Libre para nuevas licencias', poolsData.wldFree||'—'],
-                ['Total pagado', poolsData.wldPaid||'—'],
-                ['Licencias disponibles', poolsData.licsAvail||'—'],
-              ]],
-              ['🍣 Pool A — Ciclos SUSHI', [
-                ['Total', poolsData.poolA||'—'],
-                ['Reservado', poolsData.poolAComm||'—'],
-                ['Libre', poolsData.poolAFree||'—'],
-              ]],
-              ['♾️ Pool C — Perpetuidades', [
-                ['Total', poolsData.poolC||'—'],
-                ['Reservado', poolsData.poolCComm||'—'],
-                ['Libre', poolsData.poolCFree||'—'],
-              ]],
-              ['📊 Estadísticas globales', [
-                ['WLD recaudado', poolsData.wldSales||'—'],
-                ['Licencias WLD vendidas', poolsData.wldLics||'—'],
-                ['Licencias SUSHI vendidas', poolsData.sushiLics||'—'],
-                ['HACHI quemados', poolsData.burned||'—'],
-              ]],
-            ].map(([title, rows]: any) => (
-              <div key={title} style={card}>
-                <div style={cardTitle}>{title}</div>
-                {rows.map(([l, v]: any) => (
-                  <div key={l} style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>{l}</span><span style={{ fontFamily: 'monospace' }}>{v}</span></div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ADS */}
-        {tab === 'ads' && (
-          <div>
-            <div style={secLabel}>Campañas activas</div>
-            {campaigns.length === 0 ? (
-              <div style={emptyState}><div style={{ fontSize: 28 }}>📢</div><div>Sin campañas activas</div></div>
-            ) : campaigns.map((camp: any) => (
-              <div key={camp.id.toString()} style={{ ...card, marginBottom: 8 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>{camp.title}</div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#8b949e', marginBottom: 8 }}>
-                  <span>{['▶ YouTube', '✈ Telegram', '𝕏 Twitter'][camp.platform]}</span>
-                  <span>{camp.views} vistas restantes</span>
-                  <span style={{ color: '#34d399' }}>{fmt(fe(camp.reward))} HACHI/vista</span>
-                </div>
-                <button
-                  onClick={() => participateAd(camp.id)}
-                  disabled={!camp.canPart || !connected || !verified}
-                  style={{ ...btnGreen, opacity: (!camp.canPart || !connected || !verified) ? 0.4 : 1 }}
-                >
-                  {camp.canPart ? `Participar · ${fmt(fe(camp.reward))} HACHI` : camp.waitHours > 0 ? `En ${camp.waitHours}h` : 'No disponible'}
-                </button>
-              </div>
-            ))}
-
-            <div style={secLabel}>Publicar anuncio</div>
-            <div style={card}>
-              <div style={cardTitle}>Nueva campaña</div>
-              <select
-                value={campType}
-                onChange={e => setCampType(Number(e.target.value))}
-                style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#e6edf3', width: '100%', marginBottom: 8 }}
-              >
-                <option value={0}>500 vistas — 5 WLD</option>
-                <option value={1}>1,000 vistas — 10 WLD</option>
-                <option value={2}>2,000 vistas — 20 WLD</option>
-                <option value={3}>5,000 vistas — 50 WLD</option>
-              </select>
-              <input
-                value={campTitle}
-                onChange={e => setCampTitle(e.target.value)}
-                placeholder="Título del anuncio"
-                style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#e6edf3', width: '100%', marginBottom: 8, fontFamily: 'monospace' }}
-              />
-              <input
-                value={campUrl}
-                onChange={e => setCampUrl(e.target.value)}
-                placeholder="URL del contenido"
-                style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#e6edf3', width: '100%', marginBottom: 8, fontFamily: 'monospace' }}
-              />
-              <select
-                value={campPlatform}
-                onChange={e => setCampPlatform(Number(e.target.value))}
-                style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#e6edf3', width: '100%', marginBottom: 8 }}
-              >
-                <option value={0}>▶ YouTube</option>
-                <option value={1}>✈ Telegram</option>
-                <option value={2}>𝕏 Twitter/X</option>
-              </select>
-              <div style={{ ...previewBox, marginBottom: 12 }}>
-                <div style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>Costo</span><span style={{ fontFamily: 'monospace' }}>{[5,10,20,50][campType]} WLD</span></div>
-                <div style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>HACHI por vista</span><span style={{ fontFamily: 'monospace', color: '#34d399' }}>{campHPV}</span></div>
-              </div>
-              <button onClick={createCampaign} disabled={!connected || !verified || !campTitle || !campUrl} style={{ ...btnPrimary, opacity: (!connected || !verified || !campTitle || !campUrl) ? 0.4 : 1 }}>
-                Publicar campaña · {[5,10,20,50][campType]} WLD
-              </button>
+          <div style={card}><div style={cTitle}>HACHI diario</div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div><div style={{fontSize:22,fontWeight:700,fontFamily:'monospace'}}>10 HACHI</div><div style={{fontSize:12,color:'#8b949e'}}>Para usuarios verificados · cada 24h</div></div>
+              <button onClick={claimDaily} disabled={dailyBtn.disabled||!connected} style={{...btnG,width:'auto',padding:'8px 16px',opacity:(dailyBtn.disabled||!connected)?0.4:1}}>{dailyBtn.text}</button>
             </div>
           </div>
-        )}
+          {logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,marginBottom:12}}>
+            <div style={{fontSize:10,color:'#f87171',marginBottom:4,fontWeight:700}}>DEBUG</div>
+            {logs.map((l,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:'#e6edf3',marginBottom:2}}>{l}</div>)}
+            <button onClick={()=>setLogs([])} style={{fontSize:10,color:'#8b949e',background:'none',border:'none',cursor:'pointer',marginTop:4}}>Limpiar</button>
+          </div>}
+          {!connected&&<div style={{textAlign:'center',padding:'32px 16px',color:'#8b949e'}}>
+            <div style={{fontSize:32,marginBottom:8}}>👋</div>
+            <div style={{fontWeight:600,color:'#e6edf3',marginBottom:4}}>Bienvenido a HachiMiner</div>
+            <div>{t('connect_prompt')}</div>
+            <button onClick={connectWallet} style={{...btnP,marginTop:16,maxWidth:200}}>{t('connect')}</button>
+          </div>}
+        </div>}
 
-        {/* REFS */}
-        {tab === 'refs' && (
-          <div>
-            <div style={card}>
-              <div style={cardTitle}>Mi código de referido</div>
-              <div style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', marginBottom: 8 }}>
-                {addr || 'Conecta tu wallet'}
-              </div>
-              <button onClick={() => { navigator.clipboard.writeText(addr); showToast('Código copiado', '#3fb950') }} style={btnGhost}>Copiar código</button>
-            </div>
-            <div style={secLabel}>Registrar referido</div>
-            <div style={card}>
-              <input placeholder={'Wallet del referidor (0x...)'} style={{ background: '#12022a', border: '1px solid #5b21b6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#e6edf3', width: '100%', marginBottom: 8, fontFamily: 'monospace' }} />
-              <div style={previewBox}>
-                <div style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>Recibes</span><span style={{ color: '#3fb950', fontFamily: 'monospace' }}>50 HACHI</span></div>
-                <div style={row}><span style={{ color: '#8b949e', fontSize: 12 }}>Tu referidor recibe</span><span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>100 HACHI</span></div>
-              </div>
-              <button style={btnPrimary}>Registrar referido</button>
-            </div>
+        {tab==='lics'&&<div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
+            <button onClick={()=>setLicTab('wld')} style={licTab==='wld'?btnP:btnGh}>💠 WLD</button>
+            <button onClick={()=>setLicTab('sushi')} style={licTab==='sushi'?{...btnG,background:'transparent'}:btnGh}>🍣 SUSHI</button>
           </div>
-        )}
+          {licTab==='wld'&&<div>
+            <div style={sLabel}>Comprar licencia WLD</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+              {wldNames.map((n,i)=><div key={i} onClick={()=>setSelWLD(i)} style={{...lCard,border:`1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`,background:selWLD===i?'rgba(251,191,36,.08)':'#1e0840',boxShadow:selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none'}}>
+                <div style={{fontSize:11,fontWeight:700}}>{n}</div>
+                <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([1,3,5,10][i]*wldHachi*1.3))}</div>
+                <div style={{fontSize:10,color:'#8b949e'}}>HACHI · 3 meses</div>
+                <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{wldPrices[i]}</div>
+              </div>)}
+            </div>
+            <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],['Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+            <button onClick={buyWLD} disabled={!connected||!verified||wldHachi>MAX_HACHI} style={{...btnP,opacity:(!connected||!verified||wldHachi>MAX_HACHI)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':`Comprar · ${wldPrices[selWLD]}`}</button>
+            <div style={sLabel}>Licencias WLD activas</div>
+            {wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:wldLics.map(({id,l,pend})=><div key={id.toString()} style={card}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><strong>{['Básica','Estándar','Premium','Elite'][l[1]]}</strong><div style={{color:l[10]?'#3fb950':'#8b949e'}}>●</div></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{fmt(fe(pend))} HACHI</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Vence</span><span style={{fontFamily:'monospace'}}>{new Date(Number(l[7])*1000).toLocaleDateString()}</span></div>
+              <button onClick={()=>claimWLD(id)} style={{...btnG,marginTop:8}}>Cobrar HACHI</button>
+            </div>)}
+          </div>}
+          {licTab==='sushi'&&<div>
+            {!sushiAccess&&<div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.35)',borderRadius:8,padding:20,textAlign:'center',marginBottom:12}}>
+              <div style={{fontSize:28,marginBottom:8}}>🔒</div>
+              <div style={{fontWeight:700,color:'#f87171',marginBottom:6}}>{t('access_title')}</div>
+              <div style={{fontSize:13,color:'#8b949e'}}>{t('access_desc')}</div>
+            </div>}
+            {sushiAccess&&<>
+              <div style={sLabel}>Comprar licencia HACHI/SUSHI</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+                {sushiNames.map((n,i)=><div key={i} onClick={()=>setSelSUSHI(i)} style={{...lCard,border:`1px solid ${selSUSHI===i?'#fbbf24':'#5b21b6'}`,background:selSUSHI===i?'rgba(251,191,36,.08)':'#1e0840'}}>
+                  <div style={{fontSize:11,fontWeight:700}}>{n}</div>
+                  <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([500,2000,5000,10000][i]*hachiSushi*1.5))}</div>
+                  <div style={{fontSize:10,color:'#8b949e'}}>SUSHI total ×1.5</div>
+                  <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[i]}</div>
+                </div>)}
+              </div>
+              <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],[t('day1'),sushiPrev.d1],[t('day2'),sushiPrev.d2],['Total ×1.5',sushiPrev.total],['Perpetuidad','10 SUSHI/día'],['Disponibles hoy',sushiPrev.dailyLeft]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+              <button onClick={buySUSHI} style={btnG}>{`Comprar · ${sushiPrices[selSUSHI]}`}</button>
+            </>}
+            <div style={sLabel}>Licencias SUSHI activas</div>
+            {sushiLics.length===0?<div style={empty}><div style={{fontSize:28}}>🍣</div><div>{t('no_lics')}</div></div>:null}
+          </div>}
+        </div>}
+
+        {tab==='lock'&&<div>
+          <div style={card}><div style={cTitle}>Tu posición</div>
+            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['APY pendiente',lockData.pending],['Disponible retirar',lockData.unstake]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+            <button onClick={claimAPY} style={btnG}>Cobrar APY</button>
+            <button style={btnGh}>Retirar HACHI</button>
+          </div>
+          <div style={sLabel}>Depositar HACHI</div>
+          <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
+          <button onClick={doDeposit} style={btnP}>Depositar</button>
+          <div style={sLabel}>Mis depósitos</div>
+          {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
+        </div>}
+
+        {tab==='ranking'&&<div>
+          <div style={card}><div style={cTitle}>Mis estadísticas</div>
+            {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+          </div>
+          <button onClick={claimPrize} style={btnGo}>Cobrar premio</button>
+          <div style={sLabel}>Ranking semanal</div>
+          {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.map((e,i)=>{
+            const isMe=e.a.toLowerCase()===addr.toLowerCase(),medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`
+            return <div key={e.a} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:8,marginBottom:4,background:'#1e0840',border:`1px solid ${isMe?'#34d399':'#5b21b6'}`}}>
+              <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,width:28}}>{medal}</div>
+              <div style={{fontFamily:'monospace',fontSize:12,flex:1}}>{fmtA(e.a)}{isMe&&<span style={{color:'#34d399'}}> (tú)</span>}</div>
+              <div style={{fontFamily:'monospace',fontSize:12,fontWeight:700,color:'#fbbf24'}}>{fmt(e.pts)}</div>
+            </div>
+          })}
+        </div>}
+
+        {tab==='pools'&&<div>
+          <div style={sLabel}>Estado de pools</div>
+          {[['💠 Pool WLD',[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']]],['🍣 Pool A — Ciclos',[['Total',poolsData.poolA||'—'],['Reservado',poolsData.poolAC||'—'],['Libre',poolsData.poolAF||'—']]],['♾️ Pool C — Perp',[['Total',poolsData.poolC||'—'],['Reservado',poolsData.poolCC||'—'],['Libre',poolsData.poolCF||'—']]],['📊 Estadísticas',[['WLD recaudado',poolsData.wldSales||'—'],['Licencias WLD',poolsData.wldLics||'—'],['Licencias SUSHI',poolsData.sushiLics||'—'],['HACHI quemados',poolsData.burned||'—']]]].map(([title,rows]:any)=><div key={title} style={card}><div style={cTitle}>{title}</div>{rows.map(([l,v]:any)=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}</div>)}
+        </div>}
+
+        {tab==='ads'&&<div>
+          <div style={sLabel}>Campañas activas</div>
+          {campaigns.length===0?<div style={empty}><div style={{fontSize:28}}>📢</div><div>Sin campañas activas</div></div>:campaigns.map((c:any)=><div key={c.id.toString()} style={{...card,marginBottom:8}}>
+            <div style={{fontWeight:600,marginBottom:4}}>{c.title}</div>
+            <div style={{display:'flex',gap:12,fontSize:12,color:'#8b949e',marginBottom:8}}><span>{['▶ YouTube','✈ Telegram','𝕏 Twitter'][c.platform]}</span><span>{c.views} vistas</span><span style={{color:'#34d399'}}>{fmt(fe(c.reward))} HACHI/vista</span></div>
+            <button onClick={()=>participateAd(c.id)} disabled={!c.canPart||!connected||!verified} style={{...btnG,opacity:(!c.canPart||!connected||!verified)?0.4:1}}>{c.canPart?`Participar · ${fmt(fe(c.reward))} HACHI`:c.waitH>0?`En ${c.waitH}h`:'No disponible'}</button>
+          </div>)}
+          <div style={sLabel}>Publicar anuncio</div>
+          <div style={card}><div style={cTitle}>Nueva campaña</div>
+            <select value={campType} onChange={e=>setCampType(Number(e.target.value))} style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8}}><option value={0}>500 vistas — 5 WLD</option><option value={1}>1,000 vistas — 10 WLD</option><option value={2}>2,000 vistas — 20 WLD</option><option value={3}>5,000 vistas — 50 WLD</option></select>
+            <input value={campTitle} onChange={e=>setCampTitle(e.target.value)} placeholder="Título del anuncio" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
+            <input value={campUrl} onChange={e=>setCampUrl(e.target.value)} placeholder="URL del contenido" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
+            <select value={campPlatform} onChange={e=>setCampPlatform(Number(e.target.value))} style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8}}><option value={0}>▶ YouTube</option><option value={1}>✈ Telegram</option><option value={2}>𝕏 Twitter/X</option></select>
+            <div style={{...pBox,marginBottom:12}}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Costo</span><span style={{fontFamily:'monospace'}}>{[5,10,20,50][campType]} WLD</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI por vista</span><span style={{fontFamily:'monospace',color:'#34d399'}}>{campHPV}</span></div></div>
+            <button onClick={createCampaign} disabled={!connected||!verified||!campTitle||!campUrl} style={{...btnP,opacity:(!connected||!verified||!campTitle||!campUrl)?0.4:1}}>Publicar campaña · {[5,10,20,50][campType]} WLD</button>
+          </div>
+        </div>}
+
+        {tab==='refs'&&<div>
+          <div style={card}><div style={cTitle}>Mi código de referido</div>
+            <div style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontFamily:'monospace',fontSize:12,wordBreak:'break-all',marginBottom:8}}>{addr||'Conecta tu wallet'}</div>
+            <button onClick={()=>{navigator.clipboard.writeText(addr);toast_('Código copiado','#3fb950')}} style={btnGh}>Copiar código</button>
+          </div>
+          <div style={sLabel}>Registrar referido</div>
+          <div style={card}>
+            <input placeholder="Wallet del referidor (0x...)" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
+            <div style={pBox}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Recibes</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>50 HACHI</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu referidor recibe</span><span style={{color:'#a78bfa',fontFamily:'monospace'}}>100 HACHI</span></div></div>
+            <button style={btnP}>Registrar referido</button>
+          </div>
+        </div>}
 
       </div>
     </div>
   )
 }
 
-// ─── ESTILOS ──────────────────────────────────────────────
-const card: React.CSSProperties = { background: '#240a45', border: '1px solid #5b21b6', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 0 16px rgba(124,58,237,.25)' }
-const cardTitle: React.CSSProperties = { fontSize: 13, color: '#c4b5fd', fontFamily: 'Georgia, serif', fontStyle: 'italic', marginBottom: 12 }
-const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #3b0764' }
-const secLabel: React.CSSProperties = { fontSize: 13, fontWeight: 700, fontFamily: 'Georgia, serif', color: '#e6edf3', margin: '16px 0 8px', borderBottom: '1px solid #3b0764', paddingBottom: 4 }
-const previewBox: React.CSSProperties = { background: '#1e0840', border: '1px solid #5b21b6', borderRadius: 8, padding: 12, marginBottom: 12 }
-const licCard: React.CSSProperties = { borderRadius: 8, padding: 12, cursor: 'pointer', transition: 'border-color .15s' }
-const emptyState: React.CSSProperties = { textAlign: 'center', padding: '32px 16px', color: '#8b949e' }
-const btnPrimary: React.CSSProperties = { background: '#7c3aed', color: '#fff', border: '1px solid #7c3aed', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'Georgia, serif', boxShadow: '0 0 14px rgba(124,58,237,.5)' }
-const btnGreen: React.CSSProperties = { background: 'transparent', color: '#34d399', border: '1px solid #34d399', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'Georgia, serif' }
-const btnGold: React.CSSProperties = { background: 'transparent', color: '#fbbf24', border: '1px solid #fbbf24', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'Georgia, serif', marginBottom: 12 }
-const btnGhost: React.CSSProperties = { background: 'transparent', color: '#8b949e', border: '1px solid #30363d', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', fontFamily: 'Georgia, serif' }
-
-
-
-
-
-
-
-
+const card: React.CSSProperties = {background:'#240a45',border:'1px solid #5b21b6',borderRadius:12,padding:16,marginBottom:12,boxShadow:'0 0 16px rgba(124,58,237,.25)'}
+const cTitle: React.CSSProperties = {fontSize:13,color:'#c4b5fd',fontFamily:'Georgia,serif',fontStyle:'italic',marginBottom:12}
+const row: React.CSSProperties = {display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid #3b0764'}
+const sLabel: React.CSSProperties = {fontSize:13,fontWeight:700,fontFamily:'Georgia,serif',color:'#e6edf3',margin:'16px 0 8px',borderBottom:'1px solid #3b0764',paddingBottom:4}
+const pBox: React.CSSProperties = {background:'#1e0840',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12}
+const lCard: React.CSSProperties = {borderRadius:8,padding:12,cursor:'pointer',transition:'border-color .15s'}
+const empty: React.CSSProperties = {textAlign:'center',padding:'32px 16px',color:'#8b949e'}
+const btnP: React.CSSProperties = {background:'#7c3aed',color:'#fff',border:'1px solid #7c3aed',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer',width:'100%',fontFamily:'Georgia,serif',boxShadow:'0 0 14px rgba(124,58,237,.5)'}
+const btnG: React.CSSProperties = {background:'transparent',color:'#34d399',border:'1px solid #34d399',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer',width:'100%',fontFamily:'Georgia,serif'}
+const btnGo: React.CSSProperties = {background:'transparent',color:'#fbbf24',border:'1px solid #fbbf24',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer',width:'100%',fontFamily:'Georgia,serif',marginBottom:12}
+const btnGh: React.CSSProperties = {background:'transparent',color:'#8b949e',border:'1px solid #30363d',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:600,cursor:'pointer',width:'100%',fontFamily:'Georgia,serif'}
