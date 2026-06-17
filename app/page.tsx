@@ -264,7 +264,10 @@ export default function HachiMiner() {
         setAddr(walletAddr)
         setConnected(true)
         setInWA(true)
-        setVerified(true)
+        // NO marcamos verified aquí. El estado real de verificación World ID
+        // se lee on-chain en checkVerif (humanVerified). Si lo forzamos a true
+        // sin que verifyHuman se haya ejecutado, las compras revierten on-chain
+        // ("transacción inválida"/pantalla en blanco) y el usuario pierde gas.
         toast_('Conectado: ' + fmtA(walletAddr), '#3fb950')
         await loadAll(walletAddr)
         return walletAddr
@@ -334,8 +337,11 @@ export default function HachiMiner() {
 
   const checkVerif = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
+      // Estado REAL de verificación: lo decide el contrato (humanVerified),
+      // no el hecho de estar dentro de World App. Si forzamos true sin
+      // verifyHuman, las compras revierten on-chain y se pierde gas.
       const v = await new ethers.Contract(C.core,CORE,p).humanVerified(a)
-      setVerified(inWA || v)
+      setVerified(!!v)
     } catch(e) {}
   }
 
@@ -406,20 +412,16 @@ export default function HachiMiner() {
     }
   }
 
-  // Construye los calls de aprobación Permit2 para un pago.
-  // Permit2 requiere 2 pasos previos a la acción:
-  //   1) ERC20.approve(PERMIT2, max)  -> autoriza a Permit2 a mover el token (1 sola vez por token)
-  //   2) PERMIT2.approve(token, spender, amount, expiration) -> autoriza a NUESTRO contrato a jalar vía Permit2
-  // Devolvemos ambos como calls del batch; World App los firma junto con la acción en una sola tx.
+  // Construye los calls de aprobación Permit2 para un pago (Allowance Transfer).
+  // Segun la doc oficial de MiniKit v2:
+  //  - World App YA aprueba el token a Permit2 automaticamente (no hace falta ERC20.approve).
+  //  - Solo se necesita PERMIT2.approve(token, spender, amount, expiration).
+  //  - La expiracion DEBE ser 0: el allowance se consume en la misma transaccion.
   const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1)
-  const MAX_UINT256 = ethers.MaxUint256
   const buildPermit2Approvals = (token: string, spender: string, amount: bigint) => {
-    // expiración a 30 días (uint48). Permit2 exige expiración futura.
-    const expiration = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
     const amt160 = amount > MAX_UINT160 ? MAX_UINT160 : amount
     return [
-      { to: token, abi: ERC20, fnName: 'approve', args: [C.permit2, MAX_UINT256] },
-      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, expiration] },
+      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, 0] },
     ]
   }
 
@@ -833,7 +835,7 @@ export default function HachiMiner() {
             {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned],['Próximo reparto (15 días)',rankStats.nextDist]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
           <button onClick={claimPrize} style={btnGo}>Cobrar premio</button>
-          <div style={sLabel}>Ranking semanal</div>
+          <div style={sLabel}>Ranking (cada 15 días)</div>
           {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.map((e,i)=>{
             const isMe=e.a.toLowerCase()===addr.toLowerCase(),medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`
             return <div key={e.a} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:8,marginBottom:4,background:'#1e0840',border:`1px solid ${isMe?'#34d399':'#5b21b6'}`}}>
