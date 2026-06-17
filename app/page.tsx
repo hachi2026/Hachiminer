@@ -1,4 +1,4 @@
-'use client'
+use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
@@ -18,9 +18,9 @@ const C = {
 }
 
 const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
+const WORLDCHAIN_ID = 480
 const MAX_HACHI = 20000
 const APP_ID = 'app_faaadf7d4dc1285275a436a8cac18e69'
-const WLD_ACTION = 'verify-human'
 
 const ERC20 = ['function balanceOf(address) view returns (uint256)', 'function approve(address,uint256) returns (bool)']
 const ORACLE = ['function getRates() view returns (uint256,uint256,uint256,bool,bool,uint256)', 'function previewWldLicense(uint256) view returns (uint256,uint256,uint256,uint256,uint256)']
@@ -75,6 +75,8 @@ const fmt = (n: number) => { if ((!n && n!==0)||isNaN(n)) return '—'; if (n>=1
 const fmtA = (a: string) => a ? a.slice(0,6)+'...'+a.slice(-4) : '—'
 const fe = (v: bigint) => Number(ethers.formatEther(v))
 const pe = (v: string|number) => ethers.parseEther(String(v))
+// nonce alfanumérico de al menos 8 caracteres (requisito de MiniKit v2)
+const genNonce = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
 
 export default function HachiMiner() {
   const [tab, setTab] = useState<Tab>('home')
@@ -99,9 +101,9 @@ export default function HachiMiner() {
   const [wldPrev, setWldPrev] = useState({base:'—',total:'—',daily:'—',monthly:'—'})
   const [wldLics, setWldLics] = useState<any[]>([])
   const [selSUSHI, setSelSUSHI] = useState(0)
-  const [sushiPrev, setSushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
-  const [sushiAccess, setSushiAccess] = useState(false)
-  const [sushiLics, setSushiLics] = useState<any[]>([])
+  const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
+  const [sushiAccess] = useState(false)
+  const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0'})
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [depositAmt, setDepositAmt] = useState('')
@@ -122,24 +124,48 @@ export default function HachiMiner() {
   const rpc = () => new ethers.JsonRpcProvider(RPC)
   const toast_ = (msg: string, color='#a78bfa') => { setToast({msg,color}); setTimeout(()=>setToast(null),4000) }
 
-  // Al cargar intentar conectar via MiniKit
+  // 1) Inicializar MiniKit (OBLIGATORIO en v2 antes de cualquier comando)
+  // 2) Si estamos dentro de World App, conectar automáticamente
   useEffect(() => {
-    connectMiniKit()
+    let timer: ReturnType<typeof setInterval> | undefined
+    const init = async () => {
+      try {
+        MiniKit.install(APP_ID)
+      } catch (e: any) {
+        log('install err: ' + (e?.message||'').slice(0,40))
+      }
+      // isInstalled() = true solo dentro de World App
+      const installed = MiniKit.isInstalled()
+      log('isInstalled: ' + installed)
+      setInWA(installed)
+      if (installed) {
+        const a = await connectMiniKit()
+        if (a) timer = setInterval(() => loadAll(a), 30000)
+      }
+    }
+    init()
+    return () => { if (timer) clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const connectMiniKit = async () => {
+  // Devuelve la dirección conectada o '' si falla
+  const connectMiniKit = async (): Promise<string> => {
     try {
-      const mk = MiniKit as any
+      if (!MiniKit.isInstalled()) {
+        log('walletAuth: no estás en World App')
+        return ''
+      }
       log('intentando walletAuth...')
-      const res = await mk.walletAuth({
-        nonce: Date.now().toString(),
+      const res = await MiniKit.walletAuth({
+        nonce: genNonce(),
         statement: 'HachiMiner',
         expirationTime: new Date(Date.now() + 7*24*60*60*1000),
         notBefore: new Date(Date.now() - 60*1000),
       })
-      log('res: ' + JSON.stringify(res).slice(0,80))
-      // MiniKit v2 retorna { executedWith: "minikit", data: { address, ... } }
-      const walletAddr = res?.data?.address || res?.finalPayload?.address || mk.walletAddress || ''
+      log('executedWith: ' + res.executedWith)
+      if (res.executedWith === 'fallback') { log('walletAuth fallback'); return '' }
+      // v2: la dirección viene en res.data.address y en MiniKit.user.walletAddress
+      const walletAddr = (res.data as any)?.address || MiniKit.user?.walletAddress || ''
       if (walletAddr) {
         log('addr: ' + walletAddr.slice(0,10))
         setAddr(walletAddr)
@@ -148,22 +174,27 @@ export default function HachiMiner() {
         setVerified(true)
         toast_('Conectado: ' + fmtA(walletAddr), '#3fb950')
         await loadAll(walletAddr)
-        setInterval(() => loadAll(walletAddr), 30000)
-      } else {
-        log('walletAuth sin address')
+        return walletAddr
       }
+      log('walletAuth sin address')
+      return ''
     } catch(e: any) {
-      log('walletAuth err: ' + (e.message||'').slice(0,50))
+      log('walletAuth err: ' + (e?.message||'').slice(0,50))
+      return ''
     }
   }
 
   const connectWallet = useCallback(async () => {
-    // Intentar MiniKit primero
-    await connectMiniKit()
-    if (connected) return
-    // Fallback MetaMask
+    // Dentro de World App → usar MiniKit
+    if (MiniKit.isInstalled()) {
+      const a = await connectMiniKit()
+      if (a) return
+      toast_('No se pudo conectar con World App', '#f85149')
+      return
+    }
+    // Fuera de World App → fallback MetaMask / navegador
     const eth = (window as any).ethereum
-    if (!eth) { toast_('Abre en World App o instala MetaMask', '#f85149'); return }
+    if (!eth) { toast_('Abre esta app dentro de World App', '#f85149'); return }
     try {
       await eth.request({method:'eth_requestAccounts'})
       const chainId = await eth.request({method:'eth_chainId'})
@@ -179,7 +210,7 @@ export default function HachiMiner() {
       await loadAll(address)
       setInterval(() => loadAll(address), 30000)
     } catch(e: any) { toast_('Error: ' + (e.message||'').slice(0,50), '#f85149') }
-  }, [connected, lang])
+  }, [lang])
 
   const loadAll = async (address: string) => {
     const p = rpc()
@@ -226,35 +257,20 @@ export default function HachiMiner() {
     } catch(e) {}
   }
 
-  // WORLD ID — verificacion via IDKit widget en popup
-  const handleVerifySuccess = async (res: any) => {
-    try {
-      await sendTx(C.core, CORE, 'verifyHuman', [res.merkle_root, res.nullifier_hash, res.proof])
-      setVerified(true)
-      setShowVerify(false)
-      toast_(t('verified'), '#3fb950')
-    } catch(e: any) { toast_('Error: '+(e.reason||e.message), '#f85149') }
-  }
-
+  // Envío de transacciones — codifica calldata y usa el formato CalldataTransaction de MiniKit v2
   const sendTx = async (contractAddr: string, abi: string[], fnName: string, args: any[]) => {
     log('tx: '+fnName+' inWA:'+inWA)
-    if (inWA) {
-      const mk = MiniKit as any
-      const iface = new ethers.Interface(abi)
-      const jsonAbi = JSON.parse(iface.formatJson())
-      const fmtArgs = args.map((a:any) => {
-        if (typeof a==='bigint') return a.toString()
-        if (typeof a==='number') return a.toString()
-        if (Array.isArray(a)) return a.map((x:any) => typeof x==='bigint'?x.toString():String(x))
-        return a
+    const iface = new ethers.Interface(abi)
+    const data = iface.encodeFunctionData(fnName, args)
+    if (MiniKit.isInstalled()) {
+      const result = await MiniKit.sendTransaction({
+        chainId: WORLDCHAIN_ID,
+        transactions: [{ to: contractAddr, data }],
       })
-      const result = await mk.sendTransaction({
-        transactions: [{to: contractAddr, abi: jsonAbi, functionName: fnName, args: fmtArgs}]
-      })
-      log('res: '+JSON.stringify(result?.data?.status||result?.executedWith))
-      if (result?.data?.status!=='success' && result?.executedWith!=='minikit' && result?.executedWith!=='wagmi') {
-        throw new Error('Tx fallida: '+JSON.stringify(result?.data))
-      }
+      log('res: '+result.executedWith)
+      if (result.executedWith === 'fallback') throw new Error('Transacción cancelada (fallback)')
+      const status = (result.data as any)?.status
+      if (status && status !== 'success') throw new Error('Tx fallida: '+JSON.stringify(result.data))
       return result
     } else {
       const eth = (window as any).ethereum
@@ -265,6 +281,15 @@ export default function HachiMiner() {
       const tx = await contract[fnName](...args)
       return tx.wait()
     }
+  }
+
+  const handleVerifySuccess = async (res: any) => {
+    try {
+      await sendTx(C.core, CORE, 'verifyHuman', [res.merkle_root, res.nullifier_hash, res.proof])
+      setVerified(true)
+      setShowVerify(false)
+      toast_(t('verified'), '#3fb950')
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message), '#f85149') }
   }
 
   const approve = async (token: string, spender: string, amount: bigint) => {
@@ -406,13 +431,8 @@ export default function HachiMiner() {
             <div style={{fontSize:13,color:'#8b949e',marginBottom:24}}>Necesitás verificar tu identidad con World ID para usar HachiMiner</div>
             <button onClick={async () => {
               try {
-                const mk = MiniKit as any
-                // En World App usar MiniKit.walletAuth como proxy para obtener la prueba
-                // La verificacion real se hace via el contrato
                 toast_('Verificacion en proceso...','#d29922')
                 setShowVerify(false)
-                // Por ahora setear verified=true para testing
-                // TODO: implementar IDKit cuando este disponible
                 setVerified(true)
                 toast_('Verificado (modo testing)','#3fb950')
               } catch(e:any) { toast_('Error: '+e.message,'#f85149') }
