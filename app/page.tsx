@@ -321,6 +321,24 @@ export default function HachiMiner() {
     } catch(e) {}
   }
 
+  // Interpreta el resultado de MiniKit.sendTransaction y lanza un error legible con el error_code real
+  const handleMiniKitResult = (result: any) => {
+    log('res: '+result.executedWith)
+    if (result.executedWith === 'fallback') {
+      const d = result.data as any
+      const code = d?.error_code || d?.status || 'fallback'
+      throw new Error('World App rechazó la tx: '+code)
+    }
+    const d = result.data as any
+    const status = d?.status
+    if (status && status !== 'success') {
+      const code = d?.error_code || status
+      const detail = d?.details ? ' '+JSON.stringify(d.details) : ''
+      throw new Error(code+detail)
+    }
+    return result
+  }
+
   // Envío de transacciones — codifica calldata y usa el formato CalldataTransaction de MiniKit v2
   const sendTx = async (contractAddr: string, abi: string[], fnName: string, args: any[]) => {
     log('tx: '+fnName+' inWA:'+inWA)
@@ -331,11 +349,7 @@ export default function HachiMiner() {
         chainId: WORLDCHAIN_ID,
         transactions: [{ to: contractAddr, data }],
       })
-      log('res: '+result.executedWith)
-      if (result.executedWith === 'fallback') throw new Error('Transacción cancelada (fallback)')
-      const status = (result.data as any)?.status
-      if (status && status !== 'success') throw new Error('Tx fallida: '+JSON.stringify(result.data))
-      return result
+      return handleMiniKitResult(result)
     } else {
       const eth = (window as any).ethereum
       if (!eth) throw new Error('No wallet')
@@ -348,7 +362,7 @@ export default function HachiMiner() {
   }
 
   // Envía varias llamadas en UNA sola transacción (MiniKit v2 batch). World App necesita
-  // approve + deposit juntos; si se envían por separado muestra pantalla en blanco.
+  // approve + acción juntos; si se envían por separado muestra pantalla en blanco.
   const sendTxMulti = async (calls: { to: string; abi: string[]; fnName: string; args: any[] }[]) => {
     if (MiniKit.isInstalled()) {
       const transactions = calls.map((c) => ({
@@ -356,11 +370,7 @@ export default function HachiMiner() {
         data: new ethers.Interface(c.abi).encodeFunctionData(c.fnName, c.args),
       }))
       const result = await MiniKit.sendTransaction({ chainId: WORLDCHAIN_ID, transactions })
-      log('res multi: '+result.executedWith)
-      if (result.executedWith === 'fallback') throw new Error('Transacción cancelada (fallback)')
-      const status = (result.data as any)?.status
-      if (status && status !== 'success') throw new Error('Tx fallida: '+JSON.stringify(result.data))
-      return result
+      return handleMiniKitResult(result)
     } else {
       // MetaMask no soporta batch: enviamos secuencialmente
       for (const c of calls) await sendTx(c.to, c.abi, c.fnName, c.args)
@@ -374,11 +384,6 @@ export default function HachiMiner() {
       setShowVerify(false)
       toast_(t('verified'), '#3fb950')
     } catch(e: any) { toast_('Error: '+(e.reason||e.message), '#f85149') }
-  }
-
-  const approve = async (token: string, spender: string, amount: bigint) => {
-    toast_(t('approving'), '#d29922')
-    await sendTx(token, ERC20, 'approve', [spender, amount])
   }
 
   const execTx = async (label: string, contractAddr: string, abi: string[], fnName: string, args: any[]) => {
@@ -397,15 +402,31 @@ export default function HachiMiner() {
     if (!connected) { toast_(t('err_connect'),'#f85149'); return }
     if (!verified) { toast_(t('err_verify'),'#f85149'); return }
     if (wldHachi>MAX_HACHI) { toast_(t('err_price'),'#f85149'); return }
-    await approve(C.wld, C.core, [pe(1),pe(3),pe(5),pe(10)][selWLD])
-    await execTx('Comprando licencia WLD', C.core, CORE, 'buyLicenseWLD', [selWLD])
+    try {
+      toast_('Comprando licencia WLD...', '#d29922')
+      const amt = [pe(1),pe(3),pe(5),pe(10)][selWLD]
+      await sendTxMulti([
+        { to: C.wld, abi: ERC20, fnName: 'approve', args: [C.core, amt] },
+        { to: C.core, abi: CORE, fnName: 'buyLicenseWLD', args: [selWLD] },
+      ])
+      toast_('✓ Licencia WLD comprada', '#3fb950')
+      await loadAll(addr)
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
 
   const buySUSHI = async () => {
     if (!connected) { toast_(t('err_connect'),'#f85149'); return }
     if (!verified) { toast_(t('err_verify'),'#f85149'); return }
-    await approve(C.hachi, C.core, [pe(500),pe(2000),pe(5000),pe(10000)][selSUSHI])
-    await execTx('Comprando licencia SUSHI', C.core, CORE, 'buyLicenseSushi', [selSUSHI])
+    try {
+      toast_('Comprando licencia SUSHI...', '#d29922')
+      const amt = [pe(500),pe(2000),pe(5000),pe(10000)][selSUSHI]
+      await sendTxMulti([
+        { to: C.hachi, abi: ERC20, fnName: 'approve', args: [C.core, amt] },
+        { to: C.core, abi: CORE, fnName: 'buyLicenseSushi', args: [selSUSHI] },
+      ])
+      toast_('✓ Licencia SUSHI comprada', '#3fb950')
+      await loadAll(addr)
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
 
   const claimDaily = () => execTx('Cobrando 10 HACHI', C.core, CORE, 'claimDailyHachi', [])
@@ -474,14 +495,14 @@ export default function HachiMiner() {
   }
 
   const loadPools = async (p: ethers.JsonRpcProvider) => {
-    try {
-      const ws = await new ethers.Contract(C.poolWLD,POOLWLD,p).getPoolStatus()
-      const core = new ethers.Contract(C.core,CORE,p)
-      let poolA='—',poolAC='—',poolAF='—',poolC='—',poolCC='—',poolCF='—'
-      try { const ps=await core.getPoolStatus(); poolA=fmt(fe(ps[0]))+' SUSHI'; poolAC=fmt(fe(ps[1]))+' SUSHI'; poolAF=fmt(fe(ps[2]))+' SUSHI'; poolC=fmt(fe(ps[3]))+' SUSHI'; poolCC=fmt(fe(ps[4]))+' SUSHI'; poolCF=fmt(fe(ps[5]))+' SUSHI' } catch(e) {}
-      const st = await core.getSalesStats()
-      setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, poolC, poolCC, poolCF, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail})
-    } catch(e) {}
+  try {
+  const ws = await new ethers.Contract(C.poolWLD,POOLWLD,p).getPoolStatus()
+  const core = new ethers.Contract(C.core,CORE,p)
+  let poolA='—',poolAC='—',poolAF='—',poolC='—',poolCC='—',poolCF='—'
+  try { const ps=await core.getPoolStatus(); poolA=fmt(fe(ps[0]))+' SUSHI'; poolAC=fmt(fe(ps[1]))+' SUSHI'; poolAF=fmt(fe(ps[2]))+' SUSHI'; poolC=fmt(fe(ps[3]))+' SUSHI'; poolCC=fmt(fe(ps[4]))+' SUSHI'; poolCF=fmt(fe(ps[5]))+' SUSHI' } catch(e:any) { log('poolStatus err: '+(e.message||'').slice(0,40)) }
+  const st = await core.getSalesStats()
+  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, poolC, poolCC, poolCF, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail})
+  } catch(e:any) { log('loadPools err: '+(e.message||'error').slice(0,50)) }
   }
 
   const loadAds = async (p: ethers.JsonRpcProvider) => {
@@ -502,9 +523,16 @@ export default function HachiMiner() {
   const participateAd = async (id: bigint) => { await execTx('Participando',C.adMgr,ADMGR,'participate',[id]); loadAds(rpc()) }
   const createCampaign = async () => {
     if (!campTitle||!campUrl) { toast_('Completa todos los campos','#f85149'); return }
-    await approve(C.wld, C.adMgr, [pe(5),pe(10),pe(20),pe(50)][campType])
-    await execTx('Creando campaña', C.adMgr, ADMGR, 'createCampaign', [campType,campTitle,campUrl,campPlatform])
-    setCampTitle(''); setCampUrl(''); loadAds(rpc())
+    try {
+      toast_('Creando campaña...', '#d29922')
+      const amt = [pe(5),pe(10),pe(20),pe(50)][campType]
+      await sendTxMulti([
+        { to: C.wld, abi: ERC20, fnName: 'approve', args: [C.adMgr, amt] },
+        { to: C.adMgr, abi: ADMGR, fnName: 'createCampaign', args: [campType,campTitle,campUrl,campPlatform] },
+      ])
+      toast_('✓ Campaña creada', '#3fb950')
+      setCampTitle(''); setCampUrl(''); loadAds(rpc())
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
 
   const wldNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
