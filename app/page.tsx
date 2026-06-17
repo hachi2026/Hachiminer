@@ -71,6 +71,69 @@ const TR = {
   pt: { connect:'Conectar', verified:'World ID ✓', not_verified:'Não verificado', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Início', nav_lics:'📜 Licenças', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Anúncios', nav_refs:'👥 Indicações', err_connect:'Conecte sua carteira', err_verify:'Verifique seu World ID', err_price:'Vendas pausadas', approving:'Aprovando...', no_lics:'Sem licenças ativas', connect_prompt:'Conecte sua carteira para começar', access_title:'Acesso restrito', access_desc:'Para licenças SUSHI você precisa de 5.000 HACHI bloqueados ou uma licença WLD ativa', day1:'Dia 1 — recupere investimento', day2:'Dia 2 — seu lucro (24h)' },
 }
 
+const LOGIN = {
+  es: {
+    tagline: 'Minería de HACHI verificada con World ID en World Chain',
+    whatTitle: '¿Qué es HachiMiner?',
+    whatDesc: 'HachiMiner es una mini app de World que te permite minar tokens HACHI y operar con licencias WLD y SUSHI directamente en World Chain. Compra licencias, bloquea tokens para ganar APY, participa en el ranking y reclama HACHI gratis cada día.',
+    features: [
+      { icon:'📜', title:'Licencias', desc:'Compra licencias WLD y SUSHI para generar HACHI diario.' },
+      { icon:'🔒', title:'Lock & APY', desc:'Bloquea HACHI y gana rendimiento sobre tu posición.' },
+      { icon:'🏆', title:'Ranking', desc:'Compite por premios según tu actividad.' },
+      { icon:'🎁', title:'HACHI diario', desc:'Reclama 10 HACHI gratis cada 24h si estás verificado.' },
+    ],
+    stepsTitle: 'Cómo empezar',
+    steps: [
+      'Conecta tu wallet de World App con un solo toque.',
+      'Verifica tu identidad con World ID para desbloquear todo.',
+      'Compra licencias o bloquea HACHI y empieza a minar.',
+    ],
+    cta: 'Conectar wallet',
+    ctaWA: 'Iniciar sesión con World App',
+    disclaimer: 'Al continuar conectas tu wallet a HachiMiner en World Chain. No custodiamos tus fondos.',
+  },
+  en: {
+    tagline: 'World ID-verified HACHI mining on World Chain',
+    whatTitle: 'What is HachiMiner?',
+    whatDesc: 'HachiMiner is a World mini app that lets you mine HACHI tokens and trade WLD and SUSHI licenses directly on World Chain. Buy licenses, lock tokens to earn APY, climb the ranking, and claim free HACHI every day.',
+    features: [
+      { icon:'📜', title:'Licenses', desc:'Buy WLD and SUSHI licenses to generate daily HACHI.' },
+      { icon:'🔒', title:'Lock & APY', desc:'Lock HACHI and earn yield on your position.' },
+      { icon:'🏆', title:'Ranking', desc:'Compete for prizes based on your activity.' },
+      { icon:'🎁', title:'Daily HACHI', desc:'Claim 10 free HACHI every 24h once verified.' },
+    ],
+    stepsTitle: 'How to start',
+    steps: [
+      'Connect your World App wallet with a single tap.',
+      'Verify your identity with World ID to unlock everything.',
+      'Buy licenses or lock HACHI and start mining.',
+    ],
+    cta: 'Connect wallet',
+    ctaWA: 'Sign in with World App',
+    disclaimer: 'By continuing you connect your wallet to HachiMiner on World Chain. We never custody your funds.',
+  },
+  pt: {
+    tagline: 'Mineração de HACHI verificada com World ID na World Chain',
+    whatTitle: 'O que é o HachiMiner?',
+    whatDesc: 'O HachiMiner é um mini app da World que permite minerar tokens HACHI e operar com licenças WLD e SUSHI diretamente na World Chain. Compre licenças, bloqueie tokens para ganhar APY, suba no ranking e resgate HACHI grátis todos os dias.',
+    features: [
+      { icon:'📜', title:'Licenças', desc:'Compre licenças WLD e SUSHI para gerar HACHI diário.' },
+      { icon:'🔒', title:'Lock & APY', desc:'Bloqueie HACHI e ganhe rendimento na sua posição.' },
+      { icon:'🏆', title:'Ranking', desc:'Concorra a prêmios conforme sua atividade.' },
+      { icon:'🎁', title:'HACHI diário', desc:'Resgate 10 HACHI grátis a cada 24h se verificado.' },
+    ],
+    stepsTitle: 'Como começar',
+    steps: [
+      'Conecte sua carteira World App com um toque.',
+      'Verifique sua identidade com World ID para desbloquear tudo.',
+      'Compre licenças ou bloqueie HACHI e comece a minerar.',
+    ],
+    cta: 'Conectar carteira',
+    ctaWA: 'Entrar com World App',
+    disclaimer: 'Ao continuar você conecta sua carteira ao HachiMiner na World Chain. Não custodiamos seus fundos.',
+  },
+}
+
 const fmt = (n: number) => { if ((!n && n!==0)||isNaN(n)) return '—'; if (n>=1e6) return (n/1e6).toFixed(2)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString() }
 const fmtA = (a: string) => a ? a.slice(0,6)+'...'+a.slice(-4) : '—'
 const fe = (v: bigint) => Number(ethers.formatEther(v))
@@ -121,6 +184,7 @@ export default function HachiMiner() {
 
   const log = (m: string) => setLogs(p => [...p.slice(-6), m])
   const t = (k: keyof typeof TR.es) => TR[lang][k] || TR.es[k]
+  const loginCopy = LOGIN[lang] || LOGIN.es
   const rpc = () => new ethers.JsonRpcProvider(RPC)
   const toast_ = (msg: string, color='#a78bfa') => { setToast({msg,color}); setTimeout(()=>setToast(null),4000) }
 
@@ -214,7 +278,7 @@ export default function HachiMiner() {
 
   const loadAll = async (address: string) => {
     const p = rpc()
-    await Promise.allSettled([loadBal(address,p), loadOracle(address,p), checkVerif(address,p), checkDaily(address,p)])
+    await Promise.allSettled([loadBal(address,p), loadOracle(address,p), checkVerif(address,p), checkDaily(address,p), loadPools(p)])
   }
 
   const loadBal = async (a: string, p: ethers.JsonRpcProvider) => {
@@ -242,7 +306,7 @@ export default function HachiMiner() {
   const checkVerif = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
       const v = await new ethers.Contract(C.core,CORE,p).humanVerified(a)
-      if (!inWA) setVerified(v)
+      setVerified(inWA || v)
     } catch(e) {}
   }
 
@@ -280,6 +344,26 @@ export default function HachiMiner() {
       const contract = new ethers.Contract(contractAddr, abi, signer)
       const tx = await contract[fnName](...args)
       return tx.wait()
+    }
+  }
+
+  // Envía varias llamadas en UNA sola transacción (MiniKit v2 batch). World App necesita
+  // approve + deposit juntos; si se envían por separado muestra pantalla en blanco.
+  const sendTxMulti = async (calls: { to: string; abi: string[]; fnName: string; args: any[] }[]) => {
+    if (MiniKit.isInstalled()) {
+      const transactions = calls.map((c) => ({
+        to: c.to,
+        data: new ethers.Interface(c.abi).encodeFunctionData(c.fnName, c.args),
+      }))
+      const result = await MiniKit.sendTransaction({ chainId: WORLDCHAIN_ID, transactions })
+      log('res multi: '+result.executedWith)
+      if (result.executedWith === 'fallback') throw new Error('Transacción cancelada (fallback)')
+      const status = (result.data as any)?.status
+      if (status && status !== 'success') throw new Error('Tx fallida: '+JSON.stringify(result.data))
+      return result
+    } else {
+      // MetaMask no soporta batch: enviamos secuencialmente
+      for (const c of calls) await sendTx(c.to, c.abi, c.fnName, c.args)
     }
   }
 
@@ -328,9 +412,19 @@ export default function HachiMiner() {
   const claimWLD = (id: bigint) => execTx('Cobrando HACHI', C.core, CORE, 'claimWLDHachi', [id])
   const doDeposit = async () => {
     if (!depositAmt||Number(depositAmt)<=0) { toast_('Ingresa un monto válido','#f85149'); return }
-    await approve(C.hachi, C.lock, pe(depositAmt))
-    await execTx('Depositando HACHI', C.lock, LOCK, 'deposit', [pe(depositAmt)])
-    setDepositAmt('')
+    try {
+      toast_('Depositando HACHI...', '#d29922')
+      await sendTxMulti([
+        { to: C.hachi, abi: ERC20, fnName: 'approve', args: [C.lock, pe(depositAmt)] },
+        { to: C.lock, abi: LOCK, fnName: 'deposit', args: [pe(depositAmt)] },
+      ])
+      toast_('✓ Depositando HACHI', '#3fb950')
+      setDepositAmt('')
+      await loadAll(addr)
+    } catch(e: any) {
+      const err = e.reason||e.message||'error'
+      toast_('Error: '+err.slice(0,80), '#f85149')
+    }
   }
   const claimAPY = () => execTx('Cobrando APY', C.lock, LOCK, 'claimAPY', [])
   const claimPrize = () => execTx('Cobrando premio', C.ranking, RANKING, 'claimPrize', [])
@@ -417,6 +511,62 @@ export default function HachiMiner() {
   const wldPrices = ['1 WLD','3 WLD','5 WLD','10 WLD']
   const sushiNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
   const sushiPrices = ['500 HACHI','2,000 HACHI','5,000 HACHI','10,000 HACHI']
+
+  // PANTALLA DE INICIO DE SESIÓN — se muestra mientras no haya wallet conectada
+  if (!connected) {
+    return (
+      <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#1a0533 0%,#0f0224 60%,#1a0533 100%)',color:'#e6edf3',fontFamily:'Georgia,serif',display:'flex',flexDirection:'column'}}>
+        {toast&&<div style={{position:'fixed',top:16,right:16,zIndex:999,padding:'10px 16px',borderRadius:8,background:'#161b22',border:`1px solid ${toast.color}`,color:toast.color,fontSize:13,maxWidth:320}}>{toast.msg}</div>}
+
+        {/* selector de idioma arriba a la derecha */}
+        <div style={{display:'flex',justifyContent:'flex-end',gap:4,padding:16}}>
+          {(['es','en','pt'] as Lang[]).map(l=><button key={l} onClick={()=>setLang(l)} style={{background:'none',border:`1px solid ${lang===l?'#a78bfa':'#30363d'}`,borderRadius:4,padding:'2px 8px',fontSize:11,cursor:'pointer',color:lang===l?'#e6edf3':'#8b949e'}}>{l.toUpperCase()}</button>)}
+        </div>
+
+        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'8px 20px 40px',maxWidth:480,margin:'0 auto',width:'100%'}}>
+
+          {/* HERO */}
+          <div style={{fontSize:56,marginBottom:8,filter:'drop-shadow(0 0 20px rgba(232,121,249,.6))'}}>⛏</div>
+          <h1 style={{fontSize:34,fontWeight:700,color:'#e879f9',textShadow:'0 0 18px rgba(232,121,249,.5)',margin:'0 0 8px',textAlign:'center'}}>HachiMiner</h1>
+          <p style={{fontSize:15,color:'#c4b5fd',fontStyle:'italic',textAlign:'center',margin:'0 0 28px',lineHeight:1.5,maxWidth:360}}>{loginCopy.tagline}</p>
+
+          {/* QUÉ ES */}
+          <div style={{...card,width:'100%'}}>
+            <div style={cTitle}>{loginCopy.whatTitle}</div>
+            <p style={{fontSize:13,color:'#c9d1d9',lineHeight:1.6,margin:0}}>{loginCopy.whatDesc}</p>
+          </div>
+
+          {/* FEATURES */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,width:'100%',marginBottom:12}}>
+            {loginCopy.features.map((f,i)=>(
+              <div key={i} style={{background:'#1e0840',border:'1px solid #5b21b6',borderRadius:10,padding:14,boxShadow:'0 0 12px rgba(124,58,237,.2)'}}>
+                <div style={{fontSize:22,marginBottom:6}}>{f.icon}</div>
+                <div style={{fontSize:13,fontWeight:700,color:'#e6edf3',marginBottom:3}}>{f.title}</div>
+                <div style={{fontSize:11,color:'#8b949e',lineHeight:1.5}}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* PASOS */}
+          <div style={{...card,width:'100%'}}>
+            <div style={cTitle}>{loginCopy.stepsTitle}</div>
+            {loginCopy.steps.map((s,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'6px 0'}}>
+                <div style={{flexShrink:0,width:22,height:22,borderRadius:'50%',background:'#7c3aed',color:'#fff',fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 10px rgba(124,58,237,.5)'}}>{i+1}</div>
+                <div style={{fontSize:13,color:'#c9d1d9',lineHeight:1.5}}>{s}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <button onClick={connectWallet} style={{...btnP,marginTop:8,fontSize:15,padding:'14px 16px'}}>
+            {inWA ? loginCopy.ctaWA : loginCopy.cta}
+          </button>
+          <p style={{fontSize:11,color:'#8b949e',textAlign:'center',marginTop:12,lineHeight:1.5}}>{loginCopy.disclaimer}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#1a0533 0%,#0f0224 60%,#1a0533 100%)',color:'#e6edf3',fontFamily:'Georgia,serif'}}>
@@ -578,7 +728,7 @@ export default function HachiMiner() {
 
         {tab==='ads'&&<div>
           <div style={sLabel}>Campañas activas</div>
-          {campaigns.length===0?<div style={empty}><div style={{fontSize:28}}>📢</div><div>Sin campañas activas</div></div>:campaigns.map((c:any)=><div key={c.id.toString()} style={{...card,marginBottom:8}}>
+          {campaigns.length===0?<div style={empty}><div style={{fontSize:28}}>   </div><div>Sin campañas activas</div></div>:campaigns.map((c:any)=><div key={c.id.toString()} style={{...card,marginBottom:8}}>
             <div style={{fontWeight:600,marginBottom:4}}>{c.title}</div>
             <div style={{display:'flex',gap:12,fontSize:12,color:'#8b949e',marginBottom:8}}><span>{['▶ YouTube','✈ Telegram','𝕏 Twitter'][c.platform]}</span><span>{c.views} vistas</span><span style={{color:'#34d399'}}>{fmt(fe(c.reward))} HACHI/vista</span></div>
             <button onClick={()=>participateAd(c.id)} disabled={!c.canPart||!connected||!verified} style={{...btnG,opacity:(!c.canPart||!connected||!verified)?0.4:1}}>{c.canPart?`Participar · ${fmt(fe(c.reward))} HACHI`:c.waitH>0?`En ${c.waitH}h`:'No disponible'}</button>
