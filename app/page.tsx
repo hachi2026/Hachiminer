@@ -187,7 +187,7 @@ export default function HachiMiner() {
   const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
   const [sushiAccess] = useState(false)
   const [sushiLics] = useState<any[]>([])
-  const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0'})
+  const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0)})
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [depositAmt, setDepositAmt] = useState('')
   const [rankStats, setRankStats] = useState({points:'0',pos:'—',reward:'0',earned:'0',nextDist:'—'})
@@ -412,16 +412,21 @@ export default function HachiMiner() {
     }
   }
 
-  // Construye los calls de aprobación Permit2 para un pago (Allowance Transfer).
-  // Segun la doc oficial de MiniKit v2:
-  //  - World App YA aprueba el token a Permit2 automaticamente (no hace falta ERC20.approve).
-  //  - Solo se necesita PERMIT2.approve(token, spender, amount, expiration).
-  //  - La expiracion DEBE ser 0: el allowance se consume en la misma transaccion.
+  // Construye los calls de aprobacion Permit2 para un pago (patron AllowanceTransfer ON-CHAIN).
+  // Nuestros contratos llaman PERMIT2.transferFrom(user, to, amount, token) internamente,
+  // lo que usa IAllowanceTransfer (no SignatureTransfer). Para ese patron hacen falta DOS approves:
+  //   1) ERC20.approve(PERMIT2, max)  -> autoriza a Permit2 a mover el token desde el usuario.
+  //      World App NO hace esto automaticamente (eso solo aplica al permit2 nativo por firma EIP-712).
+  //   2) PERMIT2.approve(token, spender, amount, expiration) -> autoriza a NUESTRO contrato via Permit2.
+  // La expiracion debe ser FUTURA (uint48); 0 dejaria el allowance expirado y revertiria el transferFrom.
   const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1)
+  const MAX_UINT256 = (BigInt(1) << BigInt(256)) - BigInt(1)
   const buildPermit2Approvals = (token: string, spender: string, amount: bigint) => {
     const amt160 = amount > MAX_UINT160 ? MAX_UINT160 : amount
+    const expiration = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // +30 dias (uint48)
     return [
-      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, 0] },
+      { to: token, abi: ERC20, fnName: 'approve', args: [C.permit2, MAX_UINT256] },
+      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, expiration] },
     ]
   }
 
@@ -448,7 +453,6 @@ export default function HachiMiner() {
 
   const buyWLD = async () => {
     if (!connected) { toast_(t('err_connect'),'#f85149'); return }
-    if (!verified) { toast_(t('err_verify'),'#f85149'); return }
     if (wldHachi>MAX_HACHI) { toast_(t('err_price'),'#f85149'); return }
     try {
       toast_('Comprando licencia WLD...', '#d29922')
@@ -464,7 +468,6 @@ export default function HachiMiner() {
 
   const buySUSHI = async () => {
     if (!connected) { toast_(t('err_connect'),'#f85149'); return }
-    if (!verified) { toast_(t('err_verify'),'#f85149'); return }
     try {
       toast_('Comprando licencia SUSHI...', '#d29922')
       const amt = [pe(500),pe(2000),pe(5000),pe(10000)][selSUSHI]
@@ -504,6 +507,10 @@ export default function HachiMiner() {
     }
   }
   const claimAPY = () => execTx('Cobrando APY', C.lock, LOCK, 'claimAPY', [])
+  const doUnstake = async () => {
+    if (lockData.unstakeRaw <= BigInt(0)) { toast_('No tenés HACHI disponible para retirar todavía','#f85149'); return }
+    await execTx('Retirando HACHI del lock', C.lock, LOCK, 'unstake', [lockData.unstakeRaw])
+  }
   const claimPrize = () => execTx('Cobrando premio', C.ranking, RANKING, 'claimPrize', [])
 
   const loadTab = async (v: Tab) => {
@@ -535,7 +542,7 @@ export default function HachiMiner() {
     try {
       const lock = new ethers.Contract(C.lock,LOCK,p)
       const pos = await lock.getPosition(addr)
-      setLockData({total:fmt(fe(pos[0]))+' HACHI', tier:['Sin tier','Akira','Zen','Koban','Tayko','Hachi'][pos[3]], apy:pos[4].toString()+'% APY', pending:fmt(fe(pos[2]))+' HACHI', unstake:fmt(fe(pos[1]))+' HACHI'})
+      setLockData({total:fmt(fe(pos[0]))+' HACHI', tier:['Sin tier','Akira','Zen','Koban','Tayko','Hachi'][pos[3]], apy:pos[4].toString()+'% APY', pending:fmt(fe(pos[2]))+' HACHI', unstake:fmt(fe(pos[1]))+' HACHI', unstakeRaw:pos[1]})
       const b = await lock.getUserBatches(addr)
       setLockBatches(b[0].map((a:bigint,i:number) => ({amount:fe(a), unlocks:new Date(Number(b[1][i])*1000), ready:b[2][i]})).filter((x:any) => x.amount>0))
     } catch(e) {}
@@ -628,7 +635,7 @@ export default function HachiMiner() {
   // PANTALLA DE INICIO DE SESIÓN — se muestra mientras no haya wallet conectada
   if (!connected) {
     return (
-      <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#1a0533 0%,#0f0224 60%,#1a0533 100%)',color:'#e6edf3',fontFamily:'Georgia,serif',display:'flex',flexDirection:'column'}}>
+      <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#2a1f63 0%,#1d1a52 55%,#2b2c78 100%)',color:'#e6edf3',fontFamily:'Georgia,serif',display:'flex',flexDirection:'column'}}>
         {toast&&<div style={{position:'fixed',top:16,right:16,zIndex:999,padding:'10px 16px',borderRadius:8,background:'#161b22',border:`1px solid ${toast.color}`,color:toast.color,fontSize:13,maxWidth:320}}>{toast.msg}</div>}
 
         {/* selector de idioma arriba a la derecha */}
@@ -682,7 +689,7 @@ export default function HachiMiner() {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#1a0533 0%,#0f0224 60%,#1a0533 100%)',color:'#e6edf3',fontFamily:'Georgia,serif'}}>
+    <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#2a1f63 0%,#1d1a52 55%,#2b2c78 100%)',color:'#e6edf3',fontFamily:'Georgia,serif'}}>
       {toast&&<div style={{position:'fixed',top:16,right:16,zIndex:999,padding:'10px 16px',borderRadius:8,background:'#161b22',border:`1px solid ${toast.color}`,color:toast.color,fontSize:13,maxWidth:320}}>{toast.msg}</div>}
 
       {/* POPUP VERIFICACION WORLD ID */}
@@ -691,33 +698,28 @@ export default function HachiMiner() {
           <div style={{background:'#1e0840',border:'1px solid #5b21b6',borderRadius:16,padding:32,maxWidth:360,width:'90%',textAlign:'center'}}>
             <div style={{fontSize:32,marginBottom:12}}>🌍</div>
             <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Verificar World ID</div>
-            <div style={{fontSize:13,color:'#8b949e',marginBottom:24}}>Necesitás verificar tu identidad con World ID para usar HachiMiner</div>
-            <button onClick={async () => {
-              try {
-                toast_('Verificacion en proceso...','#d29922')
-                setShowVerify(false)
-                setVerified(true)
-                toast_('Verificado (modo testing)','#3fb950')
-              } catch(e:any) { toast_('Error: '+e.message,'#f85149') }
-            }} style={{...btnP,marginBottom:8}}>Verificar con World ID</button>
+            <div style={{fontSize:13,color:'#9b96c4',marginBottom:24}}>La verificación World ID activa el acumulador de Hachi. Las compras de licencias funcionan sin verificar. Para verificarte, abrí HachiMiner dentro de World App.</div>
+            <button onClick={()=>setShowVerify(false)} style={{...btnP,marginBottom:8}}>Entendido</button>
             <button onClick={()=>setShowVerify(false)} style={btnGh}>Cancelar</button>
           </div>
         </div>
       )}
 
       {/* HEADER */}
-      <div style={{background:'#12022a',borderBottom:'1px solid #3b0764',padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',height:52,position:'sticky',top:0,zIndex:100}}>
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <div style={{fontSize:20,fontWeight:700,color:'#e879f9',textShadow:'0 0 12px rgba(232,121,249,.5)'}}>⛏ HachiMiner</div>
-          <div style={{display:'flex',gap:4}}>
-            {(['es','en','pt'] as Lang[]).map(l=><button key={l} onClick={()=>setLang(l)} style={{background:'none',border:`1px solid ${lang===l?'#a78bfa':'#30363d'}`,borderRadius:4,padding:'2px 6px',fontSize:11,cursor:'pointer',color:lang===l?'#e6edf3':'#8b949e'}}>{l.toUpperCase()}</button>)}
+      <div style={{background:'#211a55',borderBottom:'1px solid #4c3a8f',padding:'8px 14px',position:'sticky',top:0,zIndex:100}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:connected?8:0}}>
+          <div style={{fontSize:18,fontWeight:700,color:'#e879f9',textShadow:'0 0 12px rgba(232,121,249,.5)',whiteSpace:'nowrap'}}>⛏ HachiMiner</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <div style={{display:'flex',gap:4}}>
+              {(['es','en','pt'] as Lang[]).map(l=><button key={l} onClick={()=>setLang(l)} style={{background:'none',border:`1px solid ${lang===l?'#a78bfa':'#3a3470'}`,borderRadius:4,padding:'2px 6px',fontSize:11,cursor:'pointer',color:lang===l?'#e6edf3':'#9b96c4'}}>{l.toUpperCase()}</button>)}
+            </div>
+            <button onClick={connectWallet} style={{background:'#7c3aed',color:'#fff',border:'none',borderRadius:8,padding:'7px 14px',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 0 14px rgba(124,58,237,.5)',whiteSpace:'nowrap'}}>{connected?fmtA(addr):t('connect')}</button>
           </div>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          {connected&&<div style={{display:'flex',gap:12}}>{[['HACHI',hachiB],['WLD',wldB],['SUSHI',sushiB]].map(([l,v])=><div key={l} style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}><div style={{fontSize:10,color:'#8b949e',textTransform:'uppercase'}}>{l}</div><div style={{fontFamily:'monospace',fontSize:13,fontWeight:600}}>{v}</div></div>)}</div>}
-          {connected&&<div onClick={()=>!verified&&setShowVerify(true)} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#8b949e',cursor:'pointer'}}><div style={{width:7,height:7,borderRadius:'50%',background:verified?'#3fb950':'#30363d'}}></div><span>{verified?t('verified'):t('not_verified')}</span></div>}
-          <button onClick={connectWallet} style={{background:'#7c3aed',color:'#fff',border:'none',borderRadius:8,padding:'7px 14px',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 0 14px rgba(124,58,237,.5)'}}>{connected?fmtA(addr):t('connect')}</button>
-        </div>
+        {connected&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+          <div style={{display:'flex',gap:16}}>{[['HACHI',hachiB],['WLD',wldB],['SUSHI',sushiB]].map(([l,v])=><div key={l} style={{display:'flex',flexDirection:'column'}}><div style={{fontSize:9,color:'#9b96c4',textTransform:'uppercase',letterSpacing:.5}}>{l}</div><div style={{fontFamily:'monospace',fontSize:13,fontWeight:600}}>{v}</div></div>)}</div>
+          <div onClick={()=>!verified&&setShowVerify(true)} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#9b96c4',cursor:'pointer',whiteSpace:'nowrap'}}><div style={{width:7,height:7,borderRadius:'50%',background:verified?'#3fb950':'#6b6494'}}></div><span>{verified?t('verified'):t('not_verified')}</span></div>
+        </div>}
       </div>
 
       {/* NAV */}
@@ -781,7 +783,7 @@ export default function HachiMiner() {
               </div>)}
             </div>
             <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
-            <button onClick={buyWLD} disabled={!connected||!verified||wldHachi>MAX_HACHI} style={{...btnP,opacity:(!connected||!verified||wldHachi>MAX_HACHI)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':`Comprar · ${wldPrices[selWLD]}`}</button>
+            <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI} style={{...btnP,opacity:(!connected||wldHachi>MAX_HACHI)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':`Comprar · ${wldPrices[selWLD]}`}</button>
             <div style={sLabel}>Licencias WLD activas</div>
             {wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:wldLics.map(({id,l,pend})=><div key={id.toString()} style={card}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><strong>{['Básica','Estándar','Premium','Elite'][l[1]]}</strong><div style={{color:l[10]?'#3fb950':'#8b949e'}}>●</div></div>
@@ -821,7 +823,7 @@ export default function HachiMiner() {
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
             <button onClick={claimAPY} style={btnG}>Cobrar APY</button>
-            <button style={btnGh}>Retirar HACHI</button>
+            <button onClick={doUnstake} style={btnGh}>Retirar HACHI</button>
           </div>
           <div style={sLabel}>Depositar HACHI</div>
           <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
