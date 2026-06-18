@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { MiniKit } from '@worldcoin/minikit-js'
+import { MiniKit, VerificationLevel } from '@worldcoin/minikit-js'
+import { parseAbi } from 'viem'
 import { ethers } from 'ethers'
 
 const C = {
@@ -23,6 +24,9 @@ const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
 const WORLDCHAIN_ID = 480
 const MAX_HACHI = 20000
 const APP_ID = 'app_faaadf7d4dc1285275a436a8cac18e69'
+// Incognito Action de World ID configurada en el Developer Portal.
+// DEBE coincidir con el externalNullifierHash con el que se desplegó el contrato.
+const ACTION = 'verify-human'
 
 const ERC20 = ['function balanceOf(address) view returns (uint256)', 'function approve(address,uint256) returns (bool)', 'function allowance(address,address) view returns (uint256)']
 // Permit2 (AllowanceTransfer): approve da permiso a un "spender" (nuestro contrato) para mover el token vía Permit2
@@ -250,16 +254,16 @@ export default function HachiMiner() {
         return ''
       }
       log('intentando walletAuth...')
-      const res = await MiniKit.walletAuth({
+      const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce: genNonce(),
         statement: 'HachiMiner',
         expirationTime: new Date(Date.now() + 7*24*60*60*1000),
         notBefore: new Date(Date.now() - 60*1000),
       })
-      log('executedWith: ' + res.executedWith)
-      if (res.executedWith === 'fallback') { log('walletAuth fallback'); return '' }
-      // v2: la dirección viene en res.data.address y en MiniKit.user.walletAddress
-      const walletAddr = (res.data as any)?.address || MiniKit.user?.walletAddress || ''
+      log('walletAuth status: ' + (finalPayload as any)?.status)
+      if (!finalPayload || (finalPayload as any).status === 'error') { log('walletAuth error'); return '' }
+      // v1.11: la dirección viene en finalPayload.address y en MiniKit.user.walletAddress
+      const walletAddr = (finalPayload as any)?.address || MiniKit.user?.walletAddress || ''
       if (walletAddr) {
         log('addr: ' + walletAddr.slice(0,10))
         setAddr(walletAddr)
@@ -362,35 +366,27 @@ export default function HachiMiner() {
     } catch(e) { setSushiAccess(false) }
   }
 
-  // Interpreta el resultado de MiniKit.sendTransaction y lanza un error legible con el error_code real
-  const handleMiniKitResult = (result: any) => {
-    log('res: '+result.executedWith)
-    if (result.executedWith === 'fallback') {
-      const d = result.data as any
-      const code = d?.error_code || d?.status || 'fallback'
-      throw new Error('World App rechazó la tx: '+code)
-    }
-    const d = result.data as any
-    const status = d?.status
-    if (status && status !== 'success') {
-      const code = d?.error_code || status
-      const detail = d?.details ? ' '+JSON.stringify(d.details) : ''
+  // Interpreta el finalPayload de MiniKit.commandsAsync.* (v1.11) y lanza un error legible.
+  const handleMiniKitResult = (finalPayload: any) => {
+    const status = finalPayload?.status
+    log('res status: '+status)
+    if (!finalPayload || status === 'error') {
+      const code = finalPayload?.error_code || 'error'
+      const detail = finalPayload?.details ? ' '+JSON.stringify(finalPayload.details) : ''
       throw new Error(code+detail)
     }
-    return result
+    return finalPayload
   }
 
-  // Envío de transacciones — codifica calldata y usa el formato CalldataTransaction de MiniKit v2
+  // Envío de transacciones — MiniKit 1.11 exige formato ABI (address/abi/functionName/args),
+  // NO calldata cruda. Convertimos nuestros ABIs de strings a objetos viem con parseAbi.
   const sendTx = async (contractAddr: string, abi: string[], fnName: string, args: any[]) => {
     log('tx: '+fnName+' inWA:'+inWA)
-    const iface = new ethers.Interface(abi)
-    const data = iface.encodeFunctionData(fnName, args)
     if (MiniKit.isInstalled()) {
-      const result = await MiniKit.sendTransaction({
-        chainId: WORLDCHAIN_ID,
-        transactions: [{ to: contractAddr, data }],
+      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+        transaction: [{ address: contractAddr, abi: parseAbi(abi) as any, functionName: fnName as any, args }],
       })
-      return handleMiniKitResult(result)
+      return handleMiniKitResult(finalPayload)
     } else {
       const eth = (window as any).ethereum
       if (!eth) throw new Error('No wallet')
@@ -402,16 +398,18 @@ export default function HachiMiner() {
     }
   }
 
-  // Envía varias llamadas en UNA sola transacción (MiniKit v2 batch). World App necesita
+  // Envía varias llamadas en UNA sola transacción (batch atómico de World App). Necesario para
   // approve + acción juntos; si se envían por separado muestra pantalla en blanco.
   const sendTxMulti = async (calls: { to: string; abi: string[]; fnName: string; args: any[] }[]) => {
     if (MiniKit.isInstalled()) {
-      const transactions = calls.map((c) => ({
-        to: c.to,
-        data: new ethers.Interface(c.abi).encodeFunctionData(c.fnName, c.args),
+      const transaction = calls.map((c) => ({
+        address: c.to,
+        abi: parseAbi(c.abi) as any,
+        functionName: c.fnName as any,
+        args: c.args,
       }))
-      const result = await MiniKit.sendTransaction({ chainId: WORLDCHAIN_ID, transactions })
-      return handleMiniKitResult(result)
+      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({ transaction })
+      return handleMiniKitResult(finalPayload)
     } else {
       // MetaMask no soporta batch: enviamos secuencialmente
       for (const c of calls) await sendTx(c.to, c.abi, c.fnName, c.args)
@@ -428,23 +426,55 @@ export default function HachiMiner() {
   //    asi que el unico paso necesario es PERMIT2.approve(token, spender, amount, expiration),
   //    que autoriza a NUESTRO contrato a jalar via Permit2.transferFrom. (Esta es la version que
   //    permitio comprar la primera licencia con exito.)
-  //  - La expiracion debe ser FUTURA (uint48) para que transferFrom no revierta por AllowanceExpired.
+  //  - La expiracion debe ser FUTURA (uint48) pero CORTA: World App rechaza deadlines lejanos
+  //    con el error `permit_deadline_too_long`. Usamos 30 minutos, suficiente para firmar y
+  //    ejecutar la tx en el mismo flujo.
   const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1)
   const buildPermit2Approvals = (token: string, spender: string, amount: bigint) => {
     const amt160 = amount > MAX_UINT160 ? MAX_UINT160 : amount
-    const expiration = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // +30 dias (uint48)
+    const expiration = Math.floor(Date.now() / 1000) + 30 * 60 // +30 minutos (uint48)
     return [
       { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, expiration] },
     ]
   }
 
-  const handleVerifySuccess = async (res: any) => {
+  // Verificación World ID real (MiniKit 1.11). Genera la prueba dentro de World App y la
+  // registra on-chain con verifyHuman(root, nullHash, proof[8]). Esto activa el acumulador diario.
+  const [verifying, setVerifying] = useState(false)
+  const doVerify = async () => {
+    if (!MiniKit.isInstalled()) { toast_('Abrí HachiMiner dentro de World App para verificar', '#f85149'); return }
+    if (!connected || !addr) { toast_(t('err_connect'), '#f85149'); return }
+    setVerifying(true)
     try {
-      await sendTx(C.core, CORE, 'verifyHuman', [res.merkle_root, res.nullifier_hash, res.proof])
-      setVerified(true)
-      setShowVerify(false)
-      toast_(t('verified'), '#3fb950')
-    } catch(e: any) { toast_('Error: '+(e.reason||e.message), '#f85149') }
+      toast_('Abriendo World ID...', '#d29922')
+      // signal = dirección del usuario; el contrato la rehashea con keccak(abi.encodePacked(msg.sender)).
+      const { finalPayload } = await MiniKit.commandsAsync.verify({
+        action: ACTION,
+        signal: addr,
+        verification_level: VerificationLevel.Orb,
+      })
+      const p = finalPayload as any
+      if (!p || p.status === 'error') {
+        toast_('Verificación cancelada: ' + (p?.error_code || 'error'), '#f85149')
+        return
+      }
+      // El proof viene ABI-encoded como uint256[8]; lo decodificamos para el contrato.
+      const proof = ethers.AbiCoder.defaultAbiCoder().decode(['uint256[8]'], p.proof)[0]
+      const root = BigInt(p.merkle_root)
+      const nullHash = BigInt(p.nullifier_hash)
+      log('verify ok, registrando on-chain...')
+      const ok = await execTx('Registrando World ID', C.core, CORE, 'verifyHuman', [root, nullHash, proof])
+      if (ok) {
+        setVerified(true)
+        setShowVerify(false)
+        toast_('¡Verificado! El acumulador diario ya está activo', '#3fb950')
+        if (addr) loadAll(addr)
+      }
+    } catch(e: any) {
+      toast_('Error verificando: ' + (e.reason || e.message || '').slice(0, 60), '#f85149')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const execTx = async (label: string, contractAddr: string, abi: string[], fnName: string, args: any[]) => {
@@ -713,8 +743,8 @@ export default function HachiMiner() {
           <div style={{background:'#1e0840',border:'1px solid #5b21b6',borderRadius:16,padding:32,maxWidth:360,width:'90%',textAlign:'center'}}>
             <div style={{fontSize:32,marginBottom:12}}>🌍</div>
             <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Verificar World ID</div>
-            <div style={{fontSize:13,color:'#9b96c4',marginBottom:24}}>La verificación World ID activa el acumulador de Hachi. Las compras de licencias funcionan sin verificar. Para verificarte, abrí HachiMiner dentro de World App.</div>
-            <button onClick={()=>setShowVerify(false)} style={{...btnP,marginBottom:8}}>Entendido</button>
+            <div style={{fontSize:13,color:'#9b96c4',marginBottom:24}}>Verificá tu identidad con World ID (Orb) para activar el acumulador diario de Hachi. Se registra on-chain una sola vez.</div>
+            <button onClick={doVerify} disabled={verifying||!connected} style={{...btnP,marginBottom:8,opacity:(verifying||!connected)?0.5:1}}>{verifying?'Verificando...':'Verificar con World ID'}</button>
             <button onClick={()=>setShowVerify(false)} style={btnGh}>Cancelar</button>
           </div>
         </div>
