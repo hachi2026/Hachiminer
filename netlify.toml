@@ -1,6 +1,13 @@
 [build]
-  command = "npm run build"
+  command = "pnpm build"
   publish = ".next"
 
+[build.environment]
+  # Next.js 16 requiere Node 20.9+ (Netlify usa una version mas vieja por defecto)
+  NODE_VERSION = "20"
+  # Evita que warnings de peer-deps corten la instalacion con pnpm
+  NPM_FLAGS = "--no-frozen-lockfile"
+
+# Plugin oficial que adapta el build de Next.js (App Router, SSR, rutas) a Netlify
 [[plugins]]
   package = "@netlify/plugin-nextjs"
