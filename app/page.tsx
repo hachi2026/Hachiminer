@@ -40,6 +40,7 @@ const CORE = [
   'function pendingWLDHachi(uint256) view returns (uint256)',
   'function monthlyWLDRemaining(address) view returns (uint256,uint256)',
   'function getWLDAvailability() view returns (uint256,uint256)',
+  'function getSushiAvailability() view returns (uint256,uint256,uint256,uint256,uint8,uint256,uint256)',
   'function hachiDailyPool() view returns (uint256)',
   'function lastDailySettle(address) view returns (uint256)',
   'function dailyAccrued(address) view returns (uint256)',
@@ -185,7 +186,7 @@ export default function HachiMiner() {
   const [wldLics, setWldLics] = useState<any[]>([])
   const [selSUSHI, setSelSUSHI] = useState(0)
   const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
-  const [sushiAccess] = useState(false)
+  const [sushiAccess, setSushiAccess] = useState(false)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0)})
   const [lockBatches, setLockBatches] = useState<any[]>([])
@@ -354,6 +355,11 @@ export default function HachiMiner() {
       const pendingN = Number(fe(pending)), minN = Number(fe(minW)), rateN = Number(fe(rate))
       setPiggy({accrued:pendingN, min:minN, accrual:rateN, canWithdraw:pendingN>=minN})
     } catch(e) {}
+    try {
+      const sa = await new ethers.Contract(C.core, CORE, p).getSushiAvailability()
+      // acceso si tier > 0 (50k+ HACHI lockeados) O tiene licencias WLD activas (userMaxSushi > 0)
+      setSushiAccess(Number(sa[4]) > 0 || Number(sa[6]) > 0)
+    } catch(e) { setSushiAccess(false) }
   }
 
   // Interpreta el resultado de MiniKit.sendTransaction y lanza un error legible con el error_code real
@@ -413,19 +419,21 @@ export default function HachiMiner() {
   }
 
   // Construye los calls de aprobacion Permit2 para un pago (patron AllowanceTransfer ON-CHAIN).
-  // Nuestros contratos llaman PERMIT2.transferFrom(user, to, amount, token) internamente,
-  // lo que usa IAllowanceTransfer (no SignatureTransfer). Para ese patron hacen falta DOS approves:
-  //   1) ERC20.approve(PERMIT2, max)  -> autoriza a Permit2 a mover el token desde el usuario.
-  //      World App NO hace esto automaticamente (eso solo aplica al permit2 nativo por firma EIP-712).
-  //   2) PERMIT2.approve(token, spender, amount, expiration) -> autoriza a NUESTRO contrato via Permit2.
-  // La expiracion debe ser FUTURA (uint48); 0 dejaria el allowance expirado y revertiria el transferFrom.
+  // IMPORTANTE — contexto World App:
+  //  - El error MiniKit `invalid_contract` significa "el contrato no esta permitido en el
+  //    Developer Portal". Solo estan whitelisteados nuestros 5 contratos + Permit2, NO los tokens.
+  //  - Por eso NO podemos (ni necesitamos) hacer ERC20.approve(PERMIT2): llamaria al contrato
+  //    del token (no whitelisteado) y la tx entera falla con invalid_contract.
+  //  - Las smart wallets de World App YA tienen el token pre-aprobado a Permit2 automaticamente,
+  //    asi que el unico paso necesario es PERMIT2.approve(token, spender, amount, expiration),
+  //    que autoriza a NUESTRO contrato a jalar via Permit2.transferFrom. (Esta es la version que
+  //    permitio comprar la primera licencia con exito.)
+  //  - La expiracion debe ser FUTURA (uint48) para que transferFrom no revierta por AllowanceExpired.
   const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1)
-  const MAX_UINT256 = (BigInt(1) << BigInt(256)) - BigInt(1)
   const buildPermit2Approvals = (token: string, spender: string, amount: bigint) => {
     const amt160 = amount > MAX_UINT160 ? MAX_UINT160 : amount
     const expiration = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // +30 dias (uint48)
     return [
-      { to: token, abi: ERC20, fnName: 'approve', args: [C.permit2, MAX_UINT256] },
       { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, expiration] },
     ]
   }
@@ -565,10 +573,17 @@ export default function HachiMiner() {
   try {
   const ws = await new ethers.Contract(C.poolWLD,POOLWLD,p).getPoolStatus()
   const core = new ethers.Contract(C.core,CORE,p)
-  let poolA='—',poolAC='—',poolAF='—',poolC='—',poolCC='—',poolCF='—'
-  try { const ps=await core.getPoolStatus(); poolA=fmt(fe(ps[0]))+' SUSHI'; poolAC=fmt(fe(ps[1]))+' SUSHI'; poolAF=fmt(fe(ps[2]))+' SUSHI'; poolC=fmt(fe(ps[3]))+' SUSHI'; poolCC=fmt(fe(ps[4]))+' SUSHI'; poolCF=fmt(fe(ps[5]))+' SUSHI' } catch(e:any) { log('poolStatus err: '+(e.message||'').slice(0,40)) }
+  // Pool A (ciclos SUSHI). Pool C / perpetuo fue ELIMINADO del contrato (pago unico inmediato),
+  // por eso ya no lo mostramos. getPoolStatus aun devuelve poolC=0 por compatibilidad, lo ignoramos.
+  let poolA='—',poolAC='—',poolAF='—',sushiAvail='—'
+  try {
+    const ps=await core.getPoolStatus()
+    poolA=fmt(fe(ps[0]))+' SUSHI'; poolAC=fmt(fe(ps[1]))+' SUSHI'; poolAF=fmt(fe(ps[2]))+' SUSHI'
+    const sa=await core.getSushiAvailability()
+    sushiAvail=sa[1].toString()
+  } catch(e:any) { log('poolStatus err: '+(e.message||'').slice(0,40)) }
   const st = await core.getSalesStats()
-  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, poolC, poolCC, poolCF, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail})
+  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail})
   } catch(e:any) { log('loadPools err: '+(e.message||'error').slice(0,50)) }
   }
 
@@ -850,7 +865,7 @@ export default function HachiMiner() {
 
         {tab==='pools'&&<div>
           <div style={sLabel}>Estado de pools</div>
-          {[['💠 Pool WLD',[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']]],['🍣 Pool A — Ciclos',[['Total',poolsData.poolA||'—'],['Reservado',poolsData.poolAC||'—'],['Libre',poolsData.poolAF||'—']]],['♾️ Pool C — Perp',[['Total',poolsData.poolC||'—'],['Reservado',poolsData.poolCC||'—'],['Libre',poolsData.poolCF||'—']]],['📊 Estadísticas',[['WLD recaudado',poolsData.wldSales||'—'],['Licencias WLD',poolsData.wldLics||'—'],['Licencias SUSHI',poolsData.sushiLics||'—'],['HACHI quemados',poolsData.burned||'—']]]].map(([title,rows]:any)=><div key={title} style={card}><div style={cTitle}>{title}</div>{rows.map(([l,v]:any)=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}</div>)}
+          {[['💠 Pool WLD',[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']]],['🍣 Pool A — SUSHI',[['Total',poolsData.poolA||'—'],['Reservado',poolsData.poolAC||'—'],['Libre',poolsData.poolAF||'—'],['Licencias SUSHI disponibles',poolsData.sushiAvail||'—']]],['📊 Estadísticas',[['WLD recaudado',poolsData.wldSales||'—'],['Licencias WLD',poolsData.wldLics||'—'],['Licencias SUSHI',poolsData.sushiLics||'—'],['HACHI quemados',poolsData.burned||'—']]]].map(([title,rows]:any)=><div key={title} style={card}><div style={cTitle}>{title}</div>{rows.map(([l,v]:any)=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}</div>)}
         </div>}
 
         {tab==='ads'&&<div>
@@ -858,7 +873,7 @@ export default function HachiMiner() {
           {campaigns.length===0?<div style={empty}><div style={{fontSize:28}}>📺</div><div>Sin campañas activas</div></div>:campaigns.map((c:any)=><div key={c.id.toString()} style={{...card,marginBottom:8}}>
             <div style={{fontWeight:600,marginBottom:4}}>{c.title}</div>
             <div style={{display:'flex',gap:12,fontSize:12,color:'#8b949e',marginBottom:8}}><span>{['▶ YouTube','✈ Telegram','𝕏 Twitter'][c.platform]}</span><span>{c.views} vistas</span><span style={{color:'#34d399'}}>{fmt(fe(c.reward))} HACHI/vista</span></div>
-            <button onClick={()=>participateAd(c.id)} disabled={!c.canPart||!connected||!verified} style={{...btnG,opacity:(!c.canPart||!connected||!verified)?0.4:1}}>{c.canPart?`Participar · +${fmt(fe(c.reward))} a la alcancía`:c.waitH>0?`En ${c.waitH}h`:'No disponible'}</button>
+            <button onClick={()=>participateAd(c.id)} disabled={!c.canPart||!connected} style={{...btnG,opacity:(!c.canPart||!connected)?0.4:1}}>{c.canPart?`Participar · +${fmt(fe(c.reward))} a la alcancía`:c.waitH>0?`En ${c.waitH}h`:'No disponible'}</button>
           </div>)}
           <div style={sLabel}>Publicar anuncio</div>
           <div style={card}><div style={cTitle}>Nueva campaña</div>
@@ -867,7 +882,7 @@ export default function HachiMiner() {
             <input value={campUrl} onChange={e=>setCampUrl(e.target.value)} placeholder="URL del contenido" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
             <select value={campPlatform} onChange={e=>setCampPlatform(Number(e.target.value))} style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8}}><option value={0}>▶ YouTube</option><option value={1}>✈ Telegram</option><option value={2}>𝕏 Twitter/X</option></select>
             <div style={{...pBox,marginBottom:12}}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Costo</span><span style={{fontFamily:'monospace'}}>{[5,10,20,50][campType]} WLD</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI por vista</span><span style={{fontFamily:'monospace',color:'#34d399'}}>{campHPV}</span></div></div>
-            <button onClick={createCampaign} disabled={!connected||!verified||!campTitle||!campUrl} style={{...btnP,opacity:(!connected||!verified||!campTitle||!campUrl)?0.4:1}}>Publicar campaña · {[5,10,20,50][campType]} WLD</button>
+            <button onClick={createCampaign} disabled={!connected||!campTitle||!campUrl} style={{...btnP,opacity:(!connected||!campTitle||!campUrl)?0.4:1}}>Publicar campaña · {[5,10,20,50][campType]} WLD</button>
           </div>
         </div>}
 
