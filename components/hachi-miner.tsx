@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
 import type { VerificationLevel } from '@worldcoin/minikit-js'
-import { createPublicClient, http, parseAbi } from 'viem'
+import { createPublicClient, encodeFunctionData, http, parseAbi } from 'viem'
 import { useUserOperationReceipt } from '@worldcoin/minikit-react'
 import { ethers } from 'ethers'
 
@@ -421,23 +421,34 @@ export default function HachiMiner() {
 
   // Envía varias llamadas en UNA sola transacción (batch atómico de World App). Necesario para
   // approve + acción juntos; si se envían por separado muestra pantalla en blanco.
+  // Soporta calls con calldata precodificada { to, data } (Permit2 approve) y calls con
+  // ABI declarativo { to, abi, fnName, args } (funciones de nuestros contratos).
   // Incluye polling on-chain tras recibir el transaction_id de MiniKit.
-  const sendTxMulti = async (calls: { to: string; abi: string[]; fnName: string; args: any[] }[]) => {
+  const sendTxMulti = async (calls: ({ to: string; data: `0x${string}` } | { to: string; abi: string[]; fnName: string; args: any[] })[]) => {
     if (MiniKit.isInstalled()) {
-      const transaction = calls.map((c) => ({
-        address: c.to,
-        abi: parseAbi(c.abi) as any,
-        functionName: c.fnName as any,
-        args: c.args,
-      }))
-      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({ transaction })
+      const transaction = calls.map((c) => 'data' in c
+        ? { address: c.to, data: c.data }
+        : { address: c.to, abi: parseAbi(c.abi) as any, functionName: c.fnName as any, args: c.args }
+      )
+      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({ transaction: transaction as any })
       const result = handleMiniKitResult(finalPayload)
       log('polling receipt: '+(result as any).transaction_id?.slice(0,12))
       await pollUserOp((result as any).transaction_id)
       return result
     } else {
       // MetaMask no soporta batch: enviamos secuencialmente
-      for (const c of calls) await sendTx(c.to, c.abi, c.fnName, c.args)
+      for (const c of calls) {
+        if ('data' in c) {
+          const eth = (window as any).ethereum
+          if (!eth) throw new Error('No wallet')
+          const provider = new ethers.BrowserProvider(eth)
+          const signer = await provider.getSigner()
+          const tx = await signer.sendTransaction({ to: c.to, data: c.data })
+          await tx.wait()
+        } else {
+          await sendTx(c.to, c.abi, c.fnName, c.args)
+        }
+      }
     }
   }
 
@@ -455,10 +466,12 @@ export default function HachiMiner() {
   //    con el error `permit_deadline_too_long`. Usamos 30 minutos, suficiente para firmar y
   //    ejecutar la tx en el mismo flujo.
   const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1)
+  const PERMIT2_APPROVE_ABI = [{ name: 'approve', type: 'function' as const, inputs: [{name:'token',type:'address'},{name:'spender',type:'address'},{name:'amount',type:'uint160'},{name:'expiration',type:'uint48'}], outputs: [], stateMutability: 'nonpayable' as const }]
   const buildPermit2Approvals = (token: string, spender: string, amount: bigint) => {
     const amt160 = amount > MAX_UINT160 ? MAX_UINT160 : amount
+    const data = encodeFunctionData({ abi: PERMIT2_APPROVE_ABI, functionName: 'approve', args: [token as `0x${string}`, spender as `0x${string}`, amt160, 0] })
     return [
-      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, 0] },
+      { to: C.permit2, data },
     ]
   }
 
