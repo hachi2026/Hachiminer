@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
-import { IDKitWidget, type ISuccessResult } from '@worldcoin/idkit'
+import { getIsUserVerified } from '@worldcoin/minikit-js/address-book'
 import { createPublicClient, encodeFunctionData, http, parseAbi } from 'viem'
 import { useUserOperationReceipt } from '@worldcoin/minikit-react'
 import { ethers } from 'ethers'
@@ -355,12 +355,9 @@ export default function HachiMiner() {
     } catch(e) {}
   }
 
-  const checkVerif = async (a: string, p: ethers.JsonRpcProvider) => {
+  const checkVerif = async (a: string, _p: ethers.JsonRpcProvider) => {
     try {
-      // Estado REAL de verificación: lo decide el contrato (humanVerified),
-      // no el hecho de estar dentro de World App. Si forzamos true sin
-      // verifyHuman, las compras revierten on-chain y se pierde gas.
-      const v = await new ethers.Contract(C.core,CORE,p).humanVerified(a)
+      const v = await getIsUserVerified(a)
       setVerified(!!v)
     } catch(e) {}
   }
@@ -478,26 +475,6 @@ export default function HachiMiner() {
     ]
   }
 
-  // Verificación World ID via IDKit. IDKitWidget abre el flujo nativo de World App,
-  // genera la prueba, y llama a onSuccess con el resultado. Aquí lo registramos on-chain.
-  const handleVerifyProof = async (proof: ISuccessResult) => {
-    try {
-      log('verify ok, registrando on-chain...')
-      toast_('Registrando World ID on-chain...', '#d29922')
-      const decodedProof = ethers.AbiCoder.defaultAbiCoder().decode(['uint256[8]'], proof.proof)[0]
-      const root = BigInt(proof.merkle_root)
-      const nullHash = BigInt(proof.nullifier_hash)
-      const ok = await execTx('Registrando World ID', C.core, CORE, 'verifyHuman', [root, nullHash, decodedProof])
-      if (ok) {
-        setVerified(true)
-        setShowVerify(false)
-        toast_('¡Verificado! El acumulador diario ya está activo', '#3fb950')
-        if (addr) loadAll(addr)
-      }
-    } catch(e: any) {
-      toast_('Error verificando: ' + (e.reason || e.message || '').slice(0, 60), '#f85149')
-    }
-  }
 
   const execTx = async (label: string, contractAddr: string, abi: string[], fnName: string, args: any[]) => {
     try {
@@ -765,17 +742,8 @@ export default function HachiMiner() {
           <div style={{background:'#1e0840',border:'1px solid #5b21b6',borderRadius:16,padding:32,maxWidth:360,width:'90%',textAlign:'center'}}>
             <div style={{fontSize:32,marginBottom:12}}>🌍</div>
             <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Verificar World ID</div>
-            <div style={{fontSize:13,color:'#9b96c4',marginBottom:24}}>Verificá tu identidad con World ID (Orb) para activar el acumulador diario de Hachi. Se registra on-chain una sola vez.</div>
-            <IDKitWidget
-              app_id={APP_ID as `app_${string}`}
-              action={ACTION}
-              signal={addr}
-              onSuccess={handleVerifyProof}
-              verification_level={undefined}
-            >
-              {({ open }) => <button onClick={open} disabled={!connected} style={{...btnP,marginBottom:8,opacity:connected?1:0.5}}>Verificar con World ID</button>}
-            </IDKitWidget>
-            <button onClick={()=>setShowVerify(false)} style={btnGh}>Cancelar</button>
+            <div style={{fontSize:13,color:'#9b96c4',marginBottom:24}}>Tu verificación World ID se detecta automáticamente si tu wallet fue verificada con Orb en World App. No necesitás hacer nada aquí.</div>
+            <button onClick={()=>setShowVerify(false)} style={btnGh}>Cerrar</button>
           </div>
         </div>
       )}
