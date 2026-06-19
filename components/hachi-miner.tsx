@@ -456,9 +456,8 @@ export default function HachiMiner() {
   const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1)
   const buildPermit2Approvals = (token: string, spender: string, amount: bigint) => {
     const amt160 = amount > MAX_UINT160 ? MAX_UINT160 : amount
-    const expiration = Math.floor(Date.now() / 1000) + 30 * 60 // +30 minutos (uint48)
     return [
-      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, expiration] },
+      { to: C.permit2, abi: PERMIT2_ABI, fnName: 'approve', args: [token, spender, amt160, 0] },
     ]
   }
 
