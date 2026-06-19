@@ -488,11 +488,19 @@ export default function HachiMiner() {
       toast_('Abriendo World ID...', '#d29922')
       // signal = dirección del usuario; el contrato la rehashea con keccak(abi.encodePacked(msg.sender)).
       // verify fue eliminado de la API pública de MiniKit v2; usamos any para preservar el comportamiento
-      const { finalPayload } = await (MiniKit as any).commandsAsync.verify({
-        action: ACTION,
-        signal: addr,
-        verification_level: 'orb',
-      })
+      let finalPayload: any
+      try {
+        const res = await (MiniKit as any).commandsAsync.verify({
+          action: ACTION,
+          signal: addr,
+          verification_level: 'orb',
+        })
+        finalPayload = res.finalPayload ?? res
+      } catch (verifyErr: any) {
+        log('verify err: ' + (verifyErr?.message || String(verifyErr)).slice(0, 80))
+        toast_('Error: verify no disponible en esta versión', '#f85149')
+        return
+      }
       const p = finalPayload as any
       if (!p || p.status === 'error') {
         toast_('Verificación cancelada: ' + (p?.error_code || 'error'), '#f85149')
