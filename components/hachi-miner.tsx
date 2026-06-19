@@ -172,6 +172,7 @@ const fmt = (n: number) => { if ((!n && n!==0)||isNaN(n)) return '—'; if (n>=1
 const fmtA = (a: string) => a ? a.slice(0,6)+'...'+a.slice(-4) : '—'
 const fe = (v: bigint) => Number(ethers.formatEther(v))
 const pe = (v: string|number) => ethers.parseEther(String(v))
+const fmtSecs = (s: number) => { if (!s || s <= 0) return '—'; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m` }
 // nonce alfanumérico de al menos 8 caracteres (requisito de MiniKit v2)
 const genNonce = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,'0')).join('')
 
@@ -201,7 +202,7 @@ export default function HachiMiner() {
   const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
   const [sushiAccess, setSushiAccess] = useState(false)
   const [sushiLics] = useState<any[]>([])
-  const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0)})
+  const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [depositAmt, setDepositAmt] = useState('')
   const [rankStats, setRankStats] = useState({points:'0',pos:'—',reward:'0',earned:'0',nextDist:'—'})
@@ -579,7 +580,8 @@ export default function HachiMiner() {
     try {
       const lock = new ethers.Contract(C.lock,LOCK,p)
       const pos = await lock.getPosition(addr)
-      setLockData({total:fmt(fe(pos[0]))+' HACHI', tier:['Sin tier','Akira','Zen','Koban','Tayko','Hachi'][pos[3]], apy:pos[4].toString()+'% APY', pending:fmt(fe(pos[2]))+' HACHI', unstake:fmt(fe(pos[1]))+' HACHI', unstakeRaw:pos[1]})
+      const depSecs=Number(pos[5])
+    setLockData({total:fmt(fe(pos[0]))+' HACHI', tier:['Sin tier','Akira','Zen','Koban','Tayko','Hachi'][pos[3]], apy:pos[4].toString()+'% APY', pending:fmt(fe(pos[2]))+' HACHI', unstake:fmt(fe(pos[1]))+' HACHI', unstakeRaw:pos[1], nextDepositIn:fmtSecs(depSecs), nextDepositSecs:depSecs, nextClaimIn:fmtSecs(Number(pos[6]))})
       const b = await lock.getUserBatches(addr)
       setLockBatches(b[0].map((a:bigint,i:number) => ({amount:fe(a), unlocks:new Date(Number(b[1][i])*1000), ready:b[2][i]})).filter((x:any) => x.amount>0))
     } catch(e) {}
@@ -870,7 +872,7 @@ export default function HachiMiner() {
 
         {tab==='lock'&&<div>
           <div style={card}><div style={cTitle}>Tu posición</div>
-            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['APY pendiente',lockData.pending],['Disponible retirar',lockData.unstake]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['APY pendiente',lockData.pending],['Próximo cobro en',lockData.nextClaimIn],['Próximo depósito en',lockData.nextDepositIn],['Disponible retirar',lockData.unstake]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
             <button onClick={claimAPY} style={btnG}>Cobrar APY</button>
@@ -878,7 +880,7 @@ export default function HachiMiner() {
           </div>
           <div style={sLabel}>Depositar HACHI</div>
           <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
-          <button onClick={doDeposit} style={btnP}>Depositar</button>
+          <button onClick={doDeposit} disabled={lockData.nextDepositSecs>0} style={{...btnP,opacity:lockData.nextDepositSecs>0?0.4:1}}>{lockData.nextDepositSecs>0?`Disponible en ${lockData.nextDepositIn}`:'Depositar'}</button>
           <div style={sLabel}>Mis depósitos</div>
           {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
         </div>}
