@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
-import type { VerificationLevel } from '@worldcoin/minikit-js'
 import { createPublicClient, encodeFunctionData, http, parseAbi } from 'viem'
 import { useUserOperationReceipt } from '@worldcoin/minikit-react'
 import { ethers } from 'ethers'
@@ -270,16 +269,15 @@ export default function HachiMiner() {
         return ''
       }
       log('intentando walletAuth...')
-      const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+      const walletAuthResult = await MiniKit.walletAuth({
         nonce: genNonce(),
         statement: 'HachiMiner',
         expirationTime: new Date(Date.now() + 7*24*60*60*1000),
         notBefore: new Date(Date.now() - 60*1000),
       })
-      log('walletAuth status: ' + (finalPayload as any)?.status)
-      if (!finalPayload || (finalPayload as any).status === 'error') { log('walletAuth error'); return '' }
-      // v1.11: la dirección viene en finalPayload.address y en MiniKit.user.walletAddress
-      const walletAddr = (finalPayload as any)?.address || MiniKit.user?.walletAddress || ''
+      log('walletAuth executedWith: ' + walletAuthResult.executedWith)
+      // v2: la dirección viene en walletAuthResult.data.address
+      const walletAddr = walletAuthResult.data.address || MiniKit.user?.walletAddress || ''
       if (walletAddr) {
         log('addr: ' + walletAddr.slice(0,10))
         setAddr(walletAddr)
@@ -395,19 +393,20 @@ export default function HachiMiner() {
     return finalPayload
   }
 
-  // Envío de transacciones — MiniKit 1.11 exige formato ABI (address/abi/functionName/args),
-  // NO calldata cruda. Convertimos nuestros ABIs de strings a objetos viem con parseAbi.
+  // Envío de transacciones — codificamos calldata con encodeFunctionData de viem y enviamos
+  // { address, data } para evitar que MiniKit inspeccione el nombre de la función.
   // Tras recibir el transaction_id de MiniKit, hacemos polling hasta confirmar el minado on-chain.
   const sendTx = async (contractAddr: string, abi: string[], fnName: string, args: any[]) => {
     log('tx: '+fnName+' inWA:'+inWA)
     if (MiniKit.isInstalled()) {
-      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
-        transaction: [{ address: contractAddr, abi: parseAbi(abi) as any, functionName: fnName as any, args }],
+      const data = encodeFunctionData({ abi: parseAbi(abi), functionName: fnName as any, args })
+      const txResult = await MiniKit.sendTransaction({
+        transactions: [{ to: contractAddr, data }],
+        chainId: WORLDCHAIN_ID,
       })
-      const result = handleMiniKitResult(finalPayload)
-      log('polling receipt: '+(result as any).transaction_id?.slice(0,12))
-      await pollUserOp((result as any).transaction_id)
-      return result
+      log('polling receipt: '+txResult.data.userOpHash?.slice(0,12))
+      await pollUserOp(txResult.data.userOpHash)
+      return txResult.data
     } else {
       const eth = (window as any).ethereum
       if (!eth) throw new Error('No wallet')
@@ -426,15 +425,18 @@ export default function HachiMiner() {
   // Incluye polling on-chain tras recibir el transaction_id de MiniKit.
   const sendTxMulti = async (calls: ({ to: string; data: `0x${string}` } | { to: string; abi: string[]; fnName: string; args: any[] })[]) => {
     if (MiniKit.isInstalled()) {
-      const transaction = calls.map((c) => 'data' in c
-        ? { address: c.to, data: c.data }
-        : { address: c.to, abi: parseAbi(c.abi) as any, functionName: c.fnName as any, args: c.args }
-      )
-      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({ transaction: transaction as any })
-      const result = handleMiniKitResult(finalPayload)
-      log('polling receipt: '+(result as any).transaction_id?.slice(0,12))
-      await pollUserOp((result as any).transaction_id)
-      return result
+      const txs = calls.map((c) => {
+        if ('data' in c) return { to: c.to, data: c.data }
+        const data = encodeFunctionData({ abi: parseAbi(c.abi), functionName: c.fnName as any, args: c.args })
+        return { to: c.to, data }
+      })
+      const txResult = await MiniKit.sendTransaction({
+        transactions: txs,
+        chainId: WORLDCHAIN_ID,
+      })
+      log('polling receipt: '+txResult.data.userOpHash?.slice(0,12))
+      await pollUserOp(txResult.data.userOpHash)
+      return txResult.data
     } else {
       // MetaMask no soporta batch: enviamos secuencialmente
       for (const c of calls) {
@@ -485,10 +487,11 @@ export default function HachiMiner() {
     try {
       toast_('Abriendo World ID...', '#d29922')
       // signal = dirección del usuario; el contrato la rehashea con keccak(abi.encodePacked(msg.sender)).
-      const { finalPayload } = await MiniKit.commandsAsync.verify({
+      // verify fue eliminado de la API pública de MiniKit v2; usamos any para preservar el comportamiento
+      const { finalPayload } = await (MiniKit as any).commandsAsync.verify({
         action: ACTION,
         signal: addr,
-        verification_level: 'orb' as VerificationLevel,
+        verification_level: 'orb',
       })
       const p = finalPayload as any
       if (!p || p.status === 'error') {
