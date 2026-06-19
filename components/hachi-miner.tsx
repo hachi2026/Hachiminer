@@ -385,6 +385,7 @@ export default function HachiMiner() {
   // Interpreta el finalPayload de MiniKit.commandsAsync.* (v1.11) y lanza un error legible.
   const handleMiniKitResult = (finalPayload: any) => {
     const status = finalPayload?.status
+    log('full payload: ' + JSON.stringify(finalPayload))
     log('res status: '+status)
     if (!finalPayload || status === 'error') {
       const code = finalPayload?.error_code || 'error'
