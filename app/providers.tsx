@@ -1,12 +1,11 @@
 'use client'
 
-import { MiniKit } from '@worldcoin/minikit-js'
-import { useEffect } from 'react'
+import { MiniKitProvider } from '@worldcoin/minikit-js/minikit-provider'
 
-export function MiniKitProvider({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    MiniKit.install('app_faaadf7d4dc1285275a436a8cac18e69')
-  }, [])
-
-  return <>{children}</>
+export default function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <MiniKitProvider>
+      {children}
+    </MiniKitProvider>
+  )
 }
