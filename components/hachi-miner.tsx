@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
+import { IDKitWidget, type ISuccessResult } from '@worldcoin/idkit'
 import { createPublicClient, encodeFunctionData, http, parseAbi } from 'viem'
 import { useUserOperationReceipt } from '@worldcoin/minikit-react'
 import { ethers } from 'ethers'
@@ -477,41 +478,16 @@ export default function HachiMiner() {
     ]
   }
 
-  // Verificación World ID real (MiniKit 1.11). Genera la prueba dentro de World App y la
-  // registra on-chain con verifyHuman(root, nullHash, proof[8]). Esto activa el acumulador diario.
-  const [verifying, setVerifying] = useState(false)
-  const doVerify = async () => {
-    if (!MiniKit.isInstalled()) { toast_('Abrí HachiMiner dentro de World App para verificar', '#f85149'); return }
-    if (!connected || !addr) { toast_(t('err_connect'), '#f85149'); return }
-    setVerifying(true)
+  // Verificación World ID via IDKit. IDKitWidget abre el flujo nativo de World App,
+  // genera la prueba, y llama a onSuccess con el resultado. Aquí lo registramos on-chain.
+  const handleVerifyProof = async (proof: ISuccessResult) => {
     try {
-      toast_('Abriendo World ID...', '#d29922')
-      // signal = dirección del usuario; el contrato la rehashea con keccak(abi.encodePacked(msg.sender)).
-      // verify fue eliminado de la API pública de MiniKit v2; usamos any para preservar el comportamiento
-      let finalPayload: any
-      try {
-        const res = await (MiniKit as any).commandsAsync.verify({
-          action: ACTION,
-          signal: addr,
-          verification_level: 'orb',
-        })
-        finalPayload = res.finalPayload ?? res
-      } catch (verifyErr: any) {
-        log('verify err: ' + (verifyErr?.message || String(verifyErr)).slice(0, 80))
-        toast_('Error: verify no disponible en esta versión', '#f85149')
-        return
-      }
-      const p = finalPayload as any
-      if (!p || p.status === 'error') {
-        toast_('Verificación cancelada: ' + (p?.error_code || 'error'), '#f85149')
-        return
-      }
-      // El proof viene ABI-encoded como uint256[8]; lo decodificamos para el contrato.
-      const proof = ethers.AbiCoder.defaultAbiCoder().decode(['uint256[8]'], p.proof)[0]
-      const root = BigInt(p.merkle_root)
-      const nullHash = BigInt(p.nullifier_hash)
       log('verify ok, registrando on-chain...')
-      const ok = await execTx('Registrando World ID', C.core, CORE, 'verifyHuman', [root, nullHash, proof])
+      toast_('Registrando World ID on-chain...', '#d29922')
+      const decodedProof = ethers.AbiCoder.defaultAbiCoder().decode(['uint256[8]'], proof.proof)[0]
+      const root = BigInt(proof.merkle_root)
+      const nullHash = BigInt(proof.nullifier_hash)
+      const ok = await execTx('Registrando World ID', C.core, CORE, 'verifyHuman', [root, nullHash, decodedProof])
       if (ok) {
         setVerified(true)
         setShowVerify(false)
@@ -520,8 +496,6 @@ export default function HachiMiner() {
       }
     } catch(e: any) {
       toast_('Error verificando: ' + (e.reason || e.message || '').slice(0, 60), '#f85149')
-    } finally {
-      setVerifying(false)
     }
   }
 
@@ -792,7 +766,15 @@ export default function HachiMiner() {
             <div style={{fontSize:32,marginBottom:12}}>🌍</div>
             <div style={{fontWeight:700,fontSize:18,marginBottom:8}}>Verificar World ID</div>
             <div style={{fontSize:13,color:'#9b96c4',marginBottom:24}}>Verificá tu identidad con World ID (Orb) para activar el acumulador diario de Hachi. Se registra on-chain una sola vez.</div>
-            <button onClick={doVerify} disabled={verifying||!connected} style={{...btnP,marginBottom:8,opacity:(verifying||!connected)?0.5:1}}>{verifying?'Verificando...':'Verificar con World ID'}</button>
+            <IDKitWidget
+              app_id={APP_ID as `app_${string}`}
+              action={ACTION}
+              signal={addr}
+              onSuccess={handleVerifyProof}
+              verification_level={undefined}
+            >
+              {({ open }) => <button onClick={open} disabled={!connected} style={{...btnP,marginBottom:8,opacity:connected?1:0.5}}>Verificar con World ID</button>}
+            </IDKitWidget>
             <button onClick={()=>setShowVerify(false)} style={btnGh}>Cancelar</button>
           </div>
         </div>
