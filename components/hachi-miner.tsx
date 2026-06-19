@@ -889,6 +889,18 @@ export default function HachiMiner() {
           <div style={card}><div style={cTitle}>Mis estadísticas</div>
             {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned],['Próximo reparto (15 días)',rankStats.nextDist]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
+          <div style={card}>
+            <div style={cTitle}>¿Cómo se suman puntos?</div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#34d399',marginBottom:4,letterSpacing:.5}}>✓ SUMAN PUNTOS</div>
+              {[['💰','Cobrar HACHI de licencia WLD'],['🍣','Comprar licencia SUSHI'],['🐱','Retirar de la alcancía'],['📢','Participar en anuncios'],['📈','Cobrar APY del Lock'],['👥','Registrar un referido (vos y tu referido)']].map(([icon,text])=><div key={text} style={{display:'flex',alignItems:'flex-start',gap:6,padding:'4px 0',borderBottom:'1px solid #3b0764'}}><span style={{flexShrink:0,fontSize:13}}>{icon}</span><span style={{fontSize:12,color:'#c9d1d9',lineHeight:1.4}}>{text}</span></div>)}
+            </div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#f87171',marginBottom:4,letterSpacing:.5}}>✗ NO SUMAN PUNTOS</div>
+              {['Comprar licencia WLD (los puntos llegan al cobrar el HACHI generado)','Depositar en el Lock (los puntos llegan al cobrar el APY)','Retirar del Lock (unstake)'].map(text=><div key={text} style={{display:'flex',alignItems:'flex-start',gap:6,padding:'4px 0',borderBottom:'1px solid #3b0764'}}><span style={{flexShrink:0,fontSize:12,color:'#8b949e'}}>—</span><span style={{fontSize:12,color:'#8b949e',lineHeight:1.4}}>{text}</span></div>)}
+            </div>
+            <div style={{fontSize:11,color:'#9b96c4',lineHeight:1.5,paddingTop:4}}>Tu multiplicador de tier actual aumenta todos los puntos que ganés. Mientras más HACHI tengas bloqueado en el Lock, más puntos sumás por cada acción.</div>
+          </div>
           <button onClick={claimPrize} style={btnGo}>Cobrar premio</button>
           <div style={sLabel}>Ranking (cada 15 días)</div>
           {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.map((e,i)=>{
