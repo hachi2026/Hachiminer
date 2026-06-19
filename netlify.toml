@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm install --no-frozen-lockfile && pnpm build"
+  command = "pnpm install --no-frozen-lockfile --config.minimum-release-age=0 && node node_modules/next/dist/bin/next build"
   publish = ".next"
 
 [build.environment]
