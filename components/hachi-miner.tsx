@@ -612,7 +612,15 @@ export default function HachiMiner() {
     sushiAvail=sa[1].toString()
   } catch(e:any) { log('poolStatus err: '+(e.message||'').slice(0,40)) }
   const st = await core.getSalesStats()
-  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail})
+  // Compute licsAvail locally — do not use the React state variable, which may be stale
+  // when loadPools and loadOracle run in parallel (loadAll) or when loadPools runs alone (loadTab).
+  let localLicsAvail = '—'
+  try {
+    const av = await core.getWLDAvailability()
+    const n = Number(av[1])
+    localLicsAvail = n > 0 ? n + ' lics. básicas' : '0 (sin fondos)'
+  } catch(e) {}
+  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail:localLicsAvail})
   } catch(e:any) { log('loadPools err: '+(e.message||'error').slice(0,50)) }
   }
 
