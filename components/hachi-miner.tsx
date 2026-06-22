@@ -60,7 +60,6 @@ const CORE = [
   'function pendingDaily(address) view returns (uint256)',
   'function totalDailyClaims() view returns (uint256)',
   'function currentDailyRate() view returns (uint256)',
-  'function currentMinWithdraw() view returns (uint256)',
   'function getSalesStats() view returns (uint256,uint256,uint256,uint256,uint256,uint256)',
   'function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)',
   'function buyLicenseWLD(uint8)',
@@ -199,7 +198,7 @@ export default function HachiMiner() {
   const [poolFree, setPoolFree] = useState('—')
   const [licsAvail, setLicsAvail] = useState('—')
   const [priceAlert, setPriceAlert] = useState(false)
-  const [piggy, setPiggy] = useState({accrued:0,min:500,accrual:100,canWithdraw:false})
+  const [piggy, setPiggy] = useState({accrued:0,accrual:100,canWithdraw:false})
   const [selWLD, setSelWLD] = useState(0)
   const [wldPrev, setWldPrev] = useState({base:'—',total:'—',daily:'—',monthly:'—'})
   const [wldLics, setWldLics] = useState<any[]>([])
@@ -207,6 +206,8 @@ export default function HachiMiner() {
   const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
   const [sushiAccess, setSushiAccess] = useState(false)
   const [accrualStarted, setAccrualStarted] = useState(true)
+  const [lastSettle, setLastSettle] = useState(0)
+  const [debugMode] = useState(() => typeof window !== 'undefined' && window.location.search.includes('debug=1'))
   const [wldTierActive, setWldTierActive] = useState<number>(255)
   const [specialAvail, setSpecialAvail] = useState(false)
   const [basicBoughtToday, setBasicBoughtToday] = useState(0)
@@ -261,11 +262,6 @@ export default function HachiMiner() {
       }
       log('isInstalled: ' + installed)
       setInWA(installed)
-      if (installed) {
-        // Auto inicio de sesión al abrir dentro de World App
-        const a = await connectMiniKit()
-        if (a) timer = setInterval(() => loadAll(a), 30000)
-      }
     }
     init()
     return () => { if (timer) clearInterval(timer) }
@@ -360,7 +356,7 @@ export default function HachiMiner() {
       const wh=fe(r[0]),hs=fe(r[1])
       setWldHachi(wh); setHachiSushi(hs); setOracleSt(r[3]?'Manual':'DEX en vivo ✓'); setPriceAlert(wh>MAX_HACHI)
       const av = await new ethers.Contract(C.core,CORE,p).getWLDAvailability()
-      const hf=fe(av[0]),hpb=wh*1.3,lb=hpb>0?Math.floor(hf/hpb):0
+      const hf=fe(av[0]),lb=Number(av[1])
       setPoolFree(fmt(hf)+' HACHI'); setLicsAvail(lb>0?lb+' lics. básicas':'0 (sin fondos)')
     } catch(e) {}
   }
@@ -375,12 +371,14 @@ export default function HachiMiner() {
   const checkDaily = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
       const core = new ethers.Contract(C.core, CORE, p)
-      const [pending, minW, rate, settle] = await Promise.all([
-        core.pendingDaily(a), core.currentMinWithdraw(), core.currentDailyRate(), core.lastDailySettle(a)
+      const [pending, rate, settle] = await Promise.all([
+        core.pendingDaily(a), core.currentDailyRate(), core.lastDailySettle(a)
       ])
-      const pendingN = Number(fe(pending)), minN = Number(fe(minW)), rateN = Number(fe(rate))
-      setPiggy({accrued:pendingN, min:minN, accrual:rateN, canWithdraw:pendingN>=minN})
-      setAccrualStarted(Number(settle) > 0)
+      const pendingN = Number(fe(pending)), rateN = Number(fe(rate)), settleN = Number(settle)
+      setLastSettle(settleN)
+      setAccrualStarted(settleN > 0)
+      const cooldownOk = settleN === 0 || Math.floor(Date.now()/1000) >= settleN + 86400
+      setPiggy({accrued:pendingN, accrual:rateN, canWithdraw:pendingN>0 && cooldownOk})
     } catch(e) {}
     try {
       const core = new ethers.Contract(C.core, CORE, p)
@@ -540,7 +538,7 @@ export default function HachiMiner() {
   }
 
   const withdrawDaily = async () => {
-    if (!piggy.canWithdraw) { toast_(`Mínimo ${piggy.min} HACHI para retirar`,'#f85149'); return }
+    if (piggy.accrued <= 0) { toast_('No hay HACHI acumulado para retirar','#f85149'); return }
     try {
       toast_('Retirando acumulador...', '#d29922')
       await sendTx(C.core, CORE, 'withdrawDailyHachi', [])
@@ -652,7 +650,7 @@ export default function HachiMiner() {
     const n = Number(av[1])
     localLicsAvail = n > 0 ? n + ' lics. básicas' : '0 (sin fondos)'
   } catch(e) {}
-  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[1]))+' HACHI', wldFree:fmt(fe(ws[2]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail:localLicsAvail})
+  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[2]))+' HACHI', wldFree:fmt(fe(ws[1]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail:localLicsAvail})
   } catch(e:any) { log('loadPools err: '+(e.message||'error').slice(0,50)) }
   }
 
@@ -828,17 +826,23 @@ export default function HachiMiner() {
                   <div style={{fontSize:26,fontWeight:700,fontFamily:'monospace',color:'#fbbf24'}}>{fmt(piggy.accrued)}</div>
                   <div style={{fontSize:13,color:'#8b949e'}}>HACHI ahorrados</div>
                 </div>
-                <div style={{height:8,borderRadius:4,background:'#1e0840',overflow:'hidden',marginBottom:6}}>
-                  <div style={{height:'100%',width:`${Math.min(100,(piggy.accrued/piggy.min)*100)}%`,background:piggy.canWithdraw?'#34d399':'#fbbf24',transition:'width .3s'}} />
-                </div>
-                <div style={{fontSize:11,color:'#8b949e'}}>{piggy.canWithdraw?`✓ Podés retirar (mín. ${piggy.min})`:`Necesitás ${fmt(Math.max(0,piggy.min-piggy.accrued))} HACHI más (mín. ${piggy.min})`}</div>
+                {(()=>{
+                  const now = Math.floor(Date.now()/1000)
+                  const cooldownEnds = lastSettle + 86400
+                  const inCooldown = lastSettle > 0 && now < cooldownEnds
+                  if (inCooldown) {
+                    const s = cooldownEnds - now, h = Math.floor(s/3600), m = Math.floor((s%3600)/60)
+                    return <div style={{fontSize:11,color:'#d29922',marginTop:4}}>{`Próximo retiro disponible en ${h}h ${m}m`}</div>
+                  }
+                  return <div style={{fontSize:11,color:piggy.canWithdraw?'#3fb950':'#8b949e',marginTop:4}}>{piggy.canWithdraw?'✓ Retirá cuando quieras':'Aún no hay HACHI acumulado'}</div>
+                })()}
               </div>
             </div>
             <button onClick={withdrawDaily} disabled={!piggy.canWithdraw||!connected} style={{...btnG,width:'100%',padding:'10px 12px',opacity:(!piggy.canWithdraw||!connected)?0.4:1}}>Retirar al wallet</button>
             {!accrualStarted&&connected&&<button onClick={startAccrualFn} style={{...btnP,width:'100%',padding:'10px 12px',marginTop:8}}>Activar acumulador</button>}
-            <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras a partir de {piggy.min} HACHI; pagás gas solo al retirar. El ritmo se reduce a la mitad tras 1M de retiros.</div>
+            <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras; pagás gas solo al retirar.</div>
           </div>
-          {logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,marginBottom:12}}>
+          {debugMode&&logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,marginBottom:12}}>
             <div style={{fontSize:10,color:'#f87171',marginBottom:4,fontWeight:700}}>DEBUG</div>
             {logs.map((l,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:'#e6edf3',marginBottom:2}}>{l}</div>)}
             <button onClick={()=>setLogs([])} style={{fontSize:10,color:'#8b949e',background:'none',border:'none',cursor:'pointer',marginTop:4}}>Limpiar</button>
