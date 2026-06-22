@@ -151,6 +151,7 @@ contract HachiMinerCore is ReentrancyGuard {
 
     mapping(address => mapping(uint256 => uint256)) public monthlyWLDPurchases;
     mapping(address => mapping(uint256 => mapping(uint8 => uint256))) public dailySushiPurchases;
+    mapping(address => uint256) public lastSpecialSushi;
 
     uint256 public totalHachiBurned;
     uint256 public totalWldToOwner;
@@ -293,16 +294,31 @@ contract HachiMinerCore is ReentrancyGuard {
     function buyLicenseSushi(uint8 licType) external nonReentrant {
         require(licType <= 3, "Invalid license type");
 
-        uint8 tier = _getTier(msg.sender);
-
         bool hasLock = address(lockContract) != address(0) && lockContract.canMine(msg.sender);
-        require(hasLock || _hasActiveWLDLicense(msg.sender), "Need 5000 HACHI locked OR active WLD license");
+        uint8 wldTier = getHighestActiveWLDType(msg.sender);
+        bool hasWLD   = wldTier != type(uint8).max;
 
-        uint256 maxPerDay = maxSushiPerDay(tier, licType);
-        require(maxPerDay > 0, "License type not available for your tier");
+        require(hasLock || hasWLD, "Need 5000 HACHI locked OR active WLD license");
 
         uint256 today = block.timestamp / 1 days;
-        require(dailySushiPurchases[msg.sender][today][licType] < maxPerDay, "Daily limit reached");
+
+        if (licType == 0) {
+            uint256 dailyLimit = _maxBasicSushiPerDay(wldTier);
+            uint256 bought     = dailySushiPurchases[msg.sender][today][0];
+            if (bought < dailyLimit) {
+                // compra diaria normal
+            } else {
+                // basica adicional: solo WLD tipo 0 + cooldown 5 dias
+                require(wldTier == 0, "Daily basic limit reached");
+                require(specialSushiAvailable(msg.sender), "Special cooldown: 5 days required");
+                lastSpecialSushi[msg.sender] = block.timestamp;
+            }
+        } else {
+            // SUSHI Estandar/Premium/Elite: requiere WLD >= licType + cooldown 5 dias
+            require(hasWLD && wldTier >= licType, "WLD license of same level or higher required");
+            require(specialSushiAvailable(msg.sender), "Special cooldown: 5 days required");
+            lastSpecialSushi[msg.sender] = block.timestamp;
+        }
 
         uint256 hachiPrice = _getSushiPrice(licType);
         _validateAndCreateSushiLic(licType, hachiPrice, today);
@@ -340,6 +356,14 @@ contract HachiMinerCore is ReentrancyGuard {
         return LIC_SUSHI_ELITE;
     }
 
+    function _maxBasicSushiPerDay(uint8 wldTier) internal pure returns (uint256) {
+        if (wldTier == type(uint8).max) return 1; // sin licencia WLD
+        if (wldTier == 0)               return 2; // WLD Basica
+        if (wldTier == 1)               return 3; // WLD Estandar
+        if (wldTier == 2)               return 4; // WLD Premium
+        return 5;                                  // WLD Elite
+    }
+
     function _createSushiLic(
         uint8 licType, uint256 hachiPrice,
         uint256 sushiBase, uint256 sushiTotal
@@ -365,7 +389,7 @@ contract HachiMinerCore is ReentrancyGuard {
     // El HACHI se acumula de forma ficticia segun el tiempo transcurrido,
     // NO requiere transacciones diarias (gas) por parte del usuario.
     // El gas se paga UNA sola vez, al retirar (withdrawDailyHachi).
-    uint256 public constant DAILY_RATE        = 100 * 1e18;   // 100 HACHI por dia
+    uint256 public dailyRate                  = 50 * 1e18;    // 50 HACHI por dia (ajustable por owner)
     uint256 public constant HALVING_THRESHOLD = 1_000_000;    // un solo halving a 1M de retiros
     uint256 public constant BASE_MIN_WITHDRAW = 500 * 1e18;   // minimo para retirar (250 tras halving)
 
@@ -381,7 +405,8 @@ contract HachiMinerCore is ReentrancyGuard {
     function _halved(uint256 v) internal view returns (uint256) {
         return totalDailyClaims >= HALVING_THRESHOLD ? v / 2 : v;
     }
-    function currentDailyRate()   public view returns (uint256) { return _halved(DAILY_RATE); }
+    function currentDailyRate()   public view returns (uint256) { return dailyRate; }
+    function setDailyRate(uint256 newRate) external { require(msg.sender == owner, "not owner"); dailyRate = newRate; }
     function currentMinWithdraw() public view returns (uint256) { return _halved(BASE_MIN_WITHDRAW); }
 
     // Acumulacion ficticia por tiempo desde el ultimo settle (no consume gas)
@@ -404,15 +429,19 @@ contract HachiMinerCore is ReentrancyGuard {
         if (lastDailySettle[u] == 0) lastDailySettle[u] = block.timestamp;
     }
 
+    function startAccrual() external {
+        _ensureAccrualStarted(msg.sender);
+    }
+
     // Retiro del chanchito: el usuario decide cuando, pero el saldo debe ser >= minimo.
     // Es la UNICA transaccion con gas del flujo diario.
     function withdrawDailyHachi() external nonReentrant {
+        require(block.timestamp >= lastDailySettle[msg.sender] + 24 hours, "Daily claim cooldown: 24 hours");
         uint256 amount = pendingDaily(msg.sender);
-        uint256 minW   = currentMinWithdraw();
-        require(amount >= minW, "Below minimum withdraw");
+        require(amount > 0, "Nothing to withdraw");
         require(hachiDailyPool >= amount, "Daily pool empty");
-        dailyAccrued[msg.sender]   = 0;
-        lastDailySettle[msg.sender] = block.timestamp; // reinicia el reloj
+        dailyAccrued[msg.sender]    = 0;
+        lastDailySettle[msg.sender] = block.timestamp;
         hachiDailyPool -= amount;
         totalDailyClaims++;
         HACHI.safeTransfer(msg.sender, amount);
@@ -453,9 +482,6 @@ contract HachiMinerCore is ReentrancyGuard {
         uint256 rem = l.hachiTotal > l.hachiClaimed ? l.hachiTotal - l.hachiClaimed : 0;
         if (earned > rem) earned = rem;
         require(earned > 0, "Nothing to claim");
-        // Minimo de retiro tambien aplica a licencias (salvo que sea el ultimo retiro de la licencia)
-        bool isFinal = (l.hachiClaimed + earned) >= l.hachiTotal;
-        require(earned >= currentMinWithdraw() || isFinal, "Below minimum withdraw");
         l.hachiClaimed  += earned;
         l.lastHachiClaim = now_;
         poolWLD.payHachi(msg.sender, earned);
@@ -482,7 +508,7 @@ contract HachiMinerCore is ReentrancyGuard {
         perpLicsAvailable = 0;
         userTier = _getTier(msg.sender);
         userActiveSushi = _countActiveSushi(msg.sender);
-        userMaxSushi = maxSushiPerDay(userTier, 0);
+        userMaxSushi = _maxBasicSushiPerDay(getHighestActiveWLDType(msg.sender));
     }
 
     function monthlyWLDRemaining(address user) external view returns (uint256 remaining, uint256 used) {
@@ -538,21 +564,21 @@ contract HachiMinerCore is ReentrancyGuard {
     function getUserWLDLics(address u) external view returns (uint256[] memory) { return userWLDLics[u]; }
     function getUserSushiLics(address u) external view returns (uint256[] memory) { return userSushiLics[u]; }
 
-    function maxSushiPerDay(uint8 tier, uint8 licType) public pure returns (uint256) {
-        if (licType == 0) {
-            if (tier == 0) return 5; if (tier == 1) return 6; if (tier == 2) return 8; return 10;
+    function getHighestActiveWLDType(address user) public view returns (uint8) {
+        uint256[] memory ids = userWLDLics[user];
+        uint8 highest = type(uint8).max;
+        for (uint256 i = 0; i < ids.length; i++) {
+            LicenseWLD storage lic = wldLics[ids[i]];
+            if (lic.active && (highest == type(uint8).max || lic.wldType > highest)) {
+                highest = lic.wldType;
+                if (highest == 3) break;
+            }
         }
-        if (licType == 1) {
-            if (tier == 0) return 1; if (tier == 1) return 2; if (tier == 2) return 3;
-            if (tier == 3) return 4; if (tier == 4) return 5; return 6;
-        }
-        if (licType == 2) {
-            if (tier < 3) return 0; if (tier == 3) return 2; if (tier == 4) return 1; return 3;
-        }
-        if (licType == 3) {
-            if (tier < 4) return 0; if (tier == 4) return 1; return 3;
-        }
-        return 0;
+        return highest;
+    }
+
+    function specialSushiAvailable(address user) public view returns (bool) {
+        return block.timestamp >= lastSpecialSushi[user] + 5 days;
     }
 
     // --- INTERNOS --------------------------------------------
