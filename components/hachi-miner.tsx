@@ -17,9 +17,9 @@ const worldChain = {
 const C = {
   oracle:   '0x0e18Ff0A2b9981D2FF50658aD4960d17c9b7C22b',
   poolWLD:  '0x9F8ccE86271319f36AA25d8390cfC18741719f19',
-  lock:     '0xB25b9c1cAF5F12899689d8cb5D625487dB3a36b5',
+  lock:     '0xF743772A09f92850deAFcBDfe6610cFfCe326003',
   ranking:  '0xfA503d183cc747cBA75D1a5ba419150f5529eB27',
-  core:     '0x71A6E2e16f4Fdd65d5B11B7d0731Aa7b8d74e5bE',
+  core:     '0xE1892183A27389c6a4CACc091F62F9412B7EA6b9',
   adMgr:    '0xC51debcdc888d75EE91293B7E2ADE1C22C944097',
   referral: '0x10C489676a074A0d14e75Fd890F4Cf490af41E06',
   hachi:    '0xbE0313f279580FDD1aA1b1b6888407E6504fF19E',
@@ -68,6 +68,11 @@ const CORE = [
   'function claimWLDHachi(uint256)',
   'function withdrawDailyHachi()',
   'function verifyHuman(uint256,uint256,uint256[8])',
+  'function startAccrual()',
+  'function getHighestActiveWLDType(address) view returns (uint8)',
+  'function specialSushiAvailable(address) view returns (bool)',
+  'function dailyRate() view returns (uint256)',
+  'function dailySushiPurchases(address,uint256,uint8) view returns (uint256)',
 ]
 const LOCK = [
   'function getPosition(address) view returns (uint256,uint256,uint256,uint8,uint256,uint256,uint256,uint256,bool)',
@@ -201,6 +206,10 @@ export default function HachiMiner() {
   const [selSUSHI, setSelSUSHI] = useState(0)
   const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
   const [sushiAccess, setSushiAccess] = useState(false)
+  const [accrualStarted, setAccrualStarted] = useState(true)
+  const [wldTierActive, setWldTierActive] = useState<number>(255)
+  const [specialAvail, setSpecialAvail] = useState(false)
+  const [basicBoughtToday, setBasicBoughtToday] = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
   const [lockBatches, setLockBatches] = useState<any[]>([])
@@ -365,17 +374,29 @@ export default function HachiMiner() {
 
   const checkDaily = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
-      const core = new ethers.Contract(C.core,CORE,p)
-      const [pending,minW,rate] = await Promise.all([
-        core.pendingDaily(a), core.currentMinWithdraw(), core.currentDailyRate()
+      const core = new ethers.Contract(C.core, CORE, p)
+      const [pending, minW, rate, settle] = await Promise.all([
+        core.pendingDaily(a), core.currentMinWithdraw(), core.currentDailyRate(), core.lastDailySettle(a)
       ])
       const pendingN = Number(fe(pending)), minN = Number(fe(minW)), rateN = Number(fe(rate))
       setPiggy({accrued:pendingN, min:minN, accrual:rateN, canWithdraw:pendingN>=minN})
+      setAccrualStarted(Number(settle) > 0)
     } catch(e) {}
     try {
-      const sa = await new ethers.Contract(C.core, CORE, p).getSushiAvailability()
-      // acceso si tier > 0 (50k+ HACHI lockeados) O tiene licencias WLD activas (userMaxSushi > 0)
-      setSushiAccess(Number(sa[4]) > 0 || Number(sa[6]) > 0)
+      const core = new ethers.Contract(C.core, CORE, p)
+      const today = BigInt(Math.floor(Date.now() / 86400000))
+      const [sa, tier, specAvail, bought] = await Promise.all([
+        core.getSushiAvailability(),
+        core.getHighestActiveWLDType(a),
+        core.specialSushiAvailable(a),
+        core.dailySushiPurchases(a, today, 0),
+      ])
+      const tierNum = Number(tier)
+      setWldTierActive(tierNum)
+      setSpecialAvail(Boolean(specAvail))
+      setBasicBoughtToday(Number(bought))
+      // acceso si tiene WLD activa O tiene Lock con tier > 0
+      setSushiAccess(tierNum !== 255 || Number(sa[4]) > 0)
     } catch(e) { setSushiAccess(false) }
   }
 
@@ -524,6 +545,15 @@ export default function HachiMiner() {
       toast_('Retirando acumulador...', '#d29922')
       await sendTx(C.core, CORE, 'withdrawDailyHachi', [])
       toast_('✓ HACHI retirado a tu wallet', '#3fb950')
+      await loadAll(addr)
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
+  }
+  const startAccrualFn = async () => {
+    try {
+      toast_('Activando acumulador...', '#d29922')
+      await sendTx(C.core, CORE, 'startAccrual', [])
+      toast_('✓ Acumulador activado', '#3fb950')
+      setAccrualStarted(true)
       await loadAll(addr)
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
@@ -805,6 +835,7 @@ export default function HachiMiner() {
               </div>
             </div>
             <button onClick={withdrawDaily} disabled={!piggy.canWithdraw||!connected} style={{...btnG,width:'100%',padding:'10px 12px',opacity:(!piggy.canWithdraw||!connected)?0.4:1}}>Retirar al wallet</button>
+            {!accrualStarted&&connected&&<button onClick={startAccrualFn} style={{...btnP,width:'100%',padding:'10px 12px',marginTop:8}}>Activar acumulador</button>}
             <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras a partir de {piggy.min} HACHI; pagás gas solo al retirar. El ritmo se reduce a la mitad tras 1M de retiros.</div>
           </div>
           {logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,marginBottom:12}}>
@@ -852,6 +883,18 @@ export default function HachiMiner() {
               <div style={{fontSize:13,color:'#8b949e'}}>{t('access_desc')}</div>
             </div>}
             {sushiAccess&&<>
+              {(()=>{
+                const tierLabel = wldTierActive===255?'Sin licencia WLD':['Básica','Estándar','Premium','Elite'][wldTierActive]??'—'
+                const maxBasic  = wldTierActive===255?1:wldTierActive===0?2:wldTierActive===1?3:wldTierActive===2?4:5
+                const specialType = wldTierActive===0?'Básica adicional':wldTierActive===1?'Estándar':wldTierActive===2?'Premium':wldTierActive===3?'Elite':null
+                return (
+                  <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12}}>
+                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
+                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>Básicas hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
+                    {specialType&&<div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:specialAvail?'#3fb950':'#8b949e',fontWeight:600}}>{specialAvail?`✓ Disponible · ${specialType}`:'En cooldown'}</span></div>}
+                  </div>
+                )
+              })()}
               <div style={sLabel}>Comprar licencia HACHI/SUSHI</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
                 {sushiNames.map((n,i)=><div key={i} onClick={()=>setSelSUSHI(i)} style={{...lCard,border:`1px solid ${selSUSHI===i?'#fbbf24':'#5b21b6'}`,background:selSUSHI===i?'rgba(251,191,36,.08)':'#1e0840'}}>
