@@ -356,7 +356,7 @@ export default function HachiMiner() {
       const wh=fe(r[0]),hs=fe(r[1])
       setWldHachi(wh); setHachiSushi(hs); setOracleSt(r[3]?'Manual':'DEX en vivo ✓'); setPriceAlert(wh>MAX_HACHI)
       const av = await new ethers.Contract(C.core,CORE,p).getWLDAvailability()
-      const hf=fe(av[0]),lb=Number(av[1])
+      const hf=fe(av[0]), costPerLic=wh*1.30, lb=costPerLic>0?Math.floor(hf/costPerLic):0
       setPoolFree(fmt(hf)+' HACHI'); setLicsAvail(lb>0?lb+' lics. básicas':'0 (sin fondos)')
     } catch(e) {}
   }
@@ -623,7 +623,9 @@ export default function HachiMiner() {
       const myPts = Number(s[1])
       const idx = list.findIndex((e:any) => e.a.toLowerCase()===addr.toLowerCase())
       const secs = Number(nextT), d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600)
-      setRankStats({points:fmt(myPts), pos:idx>=0?'#'+(idx+1):'—', reward:fmt(fe(s[2]))+' HACHI', earned:fmt(fe(s[3]))+' HACHI', nextDist:secs>0?`${d}d ${h}h`:'Disponible'})
+      const nextDate = secs>0 ? new Date(Date.now()+secs*1000).toLocaleString('es',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
+      const nextDist = secs>0 ? `${d}d ${h}h (${nextDate})` : 'Disponible'
+      setRankStats({points:fmt(myPts), pos:idx>=0?'#'+(idx+1):'—', reward:fmt(fe(s[2]))+' HACHI', earned:fmt(fe(s[3]))+' HACHI', nextDist})
       setRankList(list)
     } catch(e) {}
   }
@@ -646,8 +648,9 @@ export default function HachiMiner() {
   // when loadPools and loadOracle run in parallel (loadAll) or when loadPools runs alone (loadTab).
   let localLicsAvail = '—'
   try {
-    const av = await core.getWLDAvailability()
-    const n = Number(av[1])
+    const [av, r] = await Promise.all([core.getWLDAvailability(), new ethers.Contract(C.oracle,ORACLE,p).getRates()])
+    const hf=fe(av[0]), wh=fe(r[0]), costPerLic=wh*1.30
+    const n = costPerLic>0 ? Math.floor(hf/costPerLic) : 0
     localLicsAvail = n > 0 ? n + ' lics. básicas' : '0 (sin fondos)'
   } catch(e) {}
   setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[2]))+' HACHI', wldFree:fmt(fe(ws[1]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail:localLicsAvail})
