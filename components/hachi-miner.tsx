@@ -30,6 +30,7 @@ const C = {
 }
 
 const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
+const HACHI_BUY_URL = 'https://world.org/mini-app?app_id=app_e5ba7c3061400e361f98ce44d8b1b9c4&path=/token/0xbe0313f279580fdd1aa1b1b6888407e6504ff19e'
 const WORLDCHAIN_ID = 480
 const MAX_HACHI = 20000
 const APP_ID = 'app_faaadf7d4dc1285275a436a8cac18e69'
@@ -72,6 +73,7 @@ const CORE = [
   'function specialSushiAvailable(address) view returns (bool)',
   'function dailyRate() view returns (uint256)',
   'function dailySushiPurchases(address,uint256,uint8) view returns (uint256)',
+  'function lastSpecialSushi(address) view returns (uint256)',
 ]
 const LOCK = [
   'function getPosition(address) view returns (uint256,uint256,uint256,uint8,uint256,uint256,uint256,uint256,bool)',
@@ -210,7 +212,10 @@ export default function HachiMiner() {
   const [debugMode] = useState(() => typeof window !== 'undefined' && window.location.search.includes('debug=1'))
   const [wldTierActive, setWldTierActive] = useState<number>(255)
   const [specialAvail, setSpecialAvail] = useState(false)
+  const [lastSpecialTs, setLastSpecialTs] = useState(0)
   const [basicBoughtToday, setBasicBoughtToday] = useState(0)
+  const [hachiRaw, setHachiRaw] = useState(0)
+  const [wldRaw, setWldRaw]     = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
   const [lockBatches, setLockBatches] = useState<any[]>([])
@@ -346,7 +351,9 @@ export default function HachiMiner() {
         new ethers.Contract(C.wld,ERC20,p).balanceOf(a),
         new ethers.Contract(C.sushi,ERC20,p).balanceOf(a),
       ])
-      setHachiB(fmt(fe(h))); setWldB(fmt(fe(w))); setSushiB(fmt(fe(s)))
+      const hN=fe(h), wN=fe(w)
+      setHachiB(fmt(hN)); setWldB(fmt(wN)); setSushiB(fmt(fe(s)))
+      setHachiRaw(hN); setWldRaw(wN)
     } catch(e) {}
   }
 
@@ -383,16 +390,18 @@ export default function HachiMiner() {
     try {
       const core = new ethers.Contract(C.core, CORE, p)
       const today = BigInt(Math.floor(Date.now() / 86400000))
-      const [sa, tier, specAvail, bought] = await Promise.all([
+      const [sa, tier, specAvail, bought, lastSpec] = await Promise.all([
         core.getSushiAvailability(),
         core.getHighestActiveWLDType(a),
         core.specialSushiAvailable(a),
         core.dailySushiPurchases(a, today, 0),
+        core.lastSpecialSushi(a),
       ])
       const tierNum = Number(tier)
       setWldTierActive(tierNum)
       setSpecialAvail(Boolean(specAvail))
       setBasicBoughtToday(Number(bought))
+      setLastSpecialTs(Number(lastSpec))
       // acceso si tiene WLD activa O tiene Lock con tier > 0
       setSushiAccess(tierNum !== 255 || Number(sa[4]) > 0)
     } catch(e) { setSushiAccess(false) }
@@ -511,6 +520,8 @@ export default function HachiMiner() {
   const buyWLD = async () => {
     if (!connected) { toast_(t('err_connect'),'#f85149'); return }
     if (wldHachi>MAX_HACHI) { toast_(t('err_price'),'#f85149'); return }
+    const wldNeeded = [1,3,5,10][selWLD]
+    if (wldRaw < wldNeeded) { toast_(`Sin saldo WLD suficiente (necesitás ${wldNeeded} WLD)`,'#f85149'); return }
     try {
       toast_('Comprando licencia WLD...', '#d29922')
       const amt = [pe(1),pe(3),pe(5),pe(10)][selWLD]
@@ -525,6 +536,8 @@ export default function HachiMiner() {
 
   const buySUSHI = async () => {
     if (!connected) { toast_(t('err_connect'),'#f85149'); return }
+    const hachiNeeded = [500,2000,5000,10000][selSUSHI]
+    if (hachiRaw < hachiNeeded) { toast_(`Sin saldo HACHI. Comprá HACHI: ${HACHI_BUY_URL}`,'#f85149'); return }
     try {
       toast_('Comprando licencia SUSHI...', '#d29922')
       const amt = [pe(500),pe(2000),pe(5000),pe(10000)][selSUSHI]
@@ -845,6 +858,7 @@ export default function HachiMiner() {
             {!accrualStarted&&connected&&<button onClick={startAccrualFn} style={{...btnP,width:'100%',padding:'10px 12px',marginTop:8}}>Activar acumulador</button>}
             <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras; pagás gas solo al retirar.</div>
           </div>
+          <button onClick={()=>window.open(HACHI_BUY_URL,'_blank')} style={{...btnG,width:'100%',marginBottom:12}}>🪙 Comprar HACHI</button>
           {debugMode&&logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,marginBottom:12}}>
             <div style={{fontSize:10,color:'#f87171',marginBottom:4,fontWeight:700}}>DEBUG</div>
             {logs.map((l,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:'#e6edf3',marginBottom:2}}>{l}</div>)}
@@ -898,7 +912,12 @@ export default function HachiMiner() {
                   <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12}}>
                     <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
                     <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>Básicas hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
-                    {specialType&&<div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:specialAvail?'#3fb950':'#8b949e',fontWeight:600}}>{specialAvail?`✓ Disponible · ${specialType}`:'En cooldown'}</span></div>}
+                    {specialType&&(()=>{
+                      if (specialAvail) return <div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:'#3fb950',fontWeight:600}}>{`✓ Disponible · ${specialType}`}</span></div>
+                      const secsLeft = Math.max(0, lastSpecialTs + 5*86400 - Math.floor(Date.now()/1000))
+                      const sd=Math.floor(secsLeft/86400), sh=Math.floor((secsLeft%86400)/3600)
+                      return <div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:'#d29922',fontWeight:600}}>{`Disponible en ${sd}d ${sh}h`}</span></div>
+                    })()}
                   </div>
                 )
               })()}
