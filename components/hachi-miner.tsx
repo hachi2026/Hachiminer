@@ -86,6 +86,7 @@ const RANKING = [
   'function getCurrentRanking() view returns (address[],uint256[],uint256[],uint8[])',
   'function getPeriodNumber() view returns (uint256)',
   'function timeUntilNextExecution() view returns (uint256)',
+  'function lastExecutedAt() view returns (uint256)',
   'function claimPrize()',
 ]
 const ADMGR = [
@@ -666,10 +667,12 @@ export default function HachiMiner() {
       setRankList(list)
     } catch(e: any) { log('ranking getCurrentRanking err: '+(e?.message||'').slice(0,60)) }
     try {
-      const nextT = await r.timeUntilNextExecution()
+      const [nextT, lastExec] = await Promise.all([r.timeUntilNextExecution(), r.lastExecutedAt()])
       const secs = Number(nextT), d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600)
       const nextDate = secs>0 ? new Date(Date.now()+secs*1000).toLocaleString('es',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
-      nextDist = secs>0 ? `${d}d ${h}h (${nextDate})` : 'Disponible'
+      if (secs > 0)              nextDist = `${d}d ${h}h (${nextDate})`
+      else if (Number(lastExec) === 0) nextDist = 'Primer reparto disponible'
+      else                       nextDist = 'Disponible'
     } catch(e: any) { log('ranking timeUntilNext err: '+(e?.message||'').slice(0,60)) }
     setRankStats({points:fmt(myPts), pos, reward, earned, nextDist})
   }
