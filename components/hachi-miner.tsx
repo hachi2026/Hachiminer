@@ -78,6 +78,7 @@ const CORE = [
 const LOCK = [
   'function getPosition(address) view returns (uint256,uint256,uint256,uint8,uint256,uint256,uint256,uint256,bool)',
   'function getUserBatches(address) view returns (uint256[],uint256[],bool[])',
+  'function canMine(address) view returns (bool)',
   'function deposit(uint256)', 'function claimAPY()', 'function unstake(uint256)',
 ]
 const RANKING = [
@@ -409,20 +410,21 @@ export default function HachiMiner() {
     try {
       const core = new ethers.Contract(C.core, CORE, p)
       const today = BigInt(Math.floor(Date.now() / 86400000))
-      const [sa, tier, specAvail, bought, lastSpec] = await Promise.all([
+      const [sa, tier, specAvail, bought, lastSpec, canMineResult] = await Promise.all([
         core.getSushiAvailability(),
         core.getHighestActiveWLDType(a),
         core.specialSushiAvailable(a),
         core.dailySushiPurchases(a, today, 0),
         core.lastSpecialSushi(a),
+        new ethers.Contract(C.lock, LOCK, p).canMine(a),
       ])
       const tierNum = Number(tier)
       setWldTierActive(tierNum)
       setSpecialAvail(Boolean(specAvail))
       setBasicBoughtToday(Number(bought))
       setLastSpecialTs(Number(lastSpec))
-      // acceso si tiene WLD activa O tiene Lock con tier > 0
-      setSushiAccess(tierNum !== 255 || Number(sa[4]) > 0)
+      // acceso si tiene WLD activa O tiene 5000+ HACHI lockeados (canMine)
+      setSushiAccess(tierNum !== 255 || Boolean(canMineResult))
     } catch(e) { setSushiAccess(false) }
   }
 
