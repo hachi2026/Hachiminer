@@ -205,7 +205,7 @@ export default function HachiMiner() {
   const [wldPrev, setWldPrev] = useState({base:'—',total:'—',daily:'—',monthly:'—'})
   const [wldLics, setWldLics] = useState<any[]>([])
   const [selSUSHI, setSelSUSHI] = useState(0)
-  const [sushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
+  const [sushiPrev, setSushiPrev] = useState({base:'—',d1:'—',d2:'—',total:'—',dailyLeft:'—'})
   const [sushiAccess, setSushiAccess] = useState(false)
   const [accrualStarted, setAccrualStarted] = useState(true)
   const [lastSettle, setLastSettle] = useState(0)
@@ -272,6 +272,25 @@ export default function HachiMiner() {
     return () => { if (timer) clearInterval(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (wldHachi <= 0) return
+    const px = [1,3,5,10][selWLD]
+    const base = px * wldHachi
+    const mult = selWLD === 3 ? 1.35 : 1.30
+    const total = Math.round(base * mult)
+    const perDay = Math.round(total / 90)
+    setWldPrev(p => ({...p, base:fmt(base)+' HACHI', total:fmt(total)+' HACHI', daily:'~'+fmt(perDay)+' HACHI/día'}))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selWLD, wldHachi])
+
+  useEffect(() => {
+    if (hachiSushi <= 0) return
+    const sushiBase = [500,2000,5000,10000][selSUSHI] * hachiSushi
+    const total     = sushiBase * 1.25
+    setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' SUSHI', total:fmt(Math.round(total))+' SUSHI'}))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selSUSHI, hachiSushi])
 
   // Devuelve la dirección conectada o '' si falla
   const connectMiniKit = async (): Promise<string> => {
@@ -629,18 +648,28 @@ export default function HachiMiner() {
   }
 
   const loadRanking = async (p: ethers.JsonRpcProvider) => {
+    const r = new ethers.Contract(C.ranking, RANKING, p)
+    let myPts = 0, reward = '—', earned = '—', pos = '—', nextDist = '—'
     try {
-      const r = new ethers.Contract(C.ranking,RANKING,p)
-      const [s,rk,nextT] = await Promise.all([r.getUserStats(addr), r.getCurrentRanking(), r.timeUntilNextExecution()])
+      const s = await r.getUserStats(addr)
+      myPts  = Number(s[1])
+      reward = fmt(fe(s[2])) + ' HACHI'
+      earned = fmt(fe(s[3])) + ' HACHI'
+    } catch(e: any) { log('ranking getUserStats err: '+(e?.message||'').slice(0,60)) }
+    try {
+      const rk = await r.getCurrentRanking()
       const list = rk[0].map((a:string,i:number) => ({a,pts:Number(rk[1][i])})).filter((e:any) => e.pts>0).sort((a:any,b:any) => b.pts-a.pts)
-      const myPts = Number(s[1])
       const idx = list.findIndex((e:any) => e.a.toLowerCase()===addr.toLowerCase())
+      pos = idx>=0 ? '#'+(idx+1) : '—'
+      setRankList(list)
+    } catch(e: any) { log('ranking getCurrentRanking err: '+(e?.message||'').slice(0,60)) }
+    try {
+      const nextT = await r.timeUntilNextExecution()
       const secs = Number(nextT), d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600)
       const nextDate = secs>0 ? new Date(Date.now()+secs*1000).toLocaleString('es',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
-      const nextDist = secs>0 ? `${d}d ${h}h (${nextDate})` : 'Disponible'
-      setRankStats({points:fmt(myPts), pos:idx>=0?'#'+(idx+1):'—', reward:fmt(fe(s[2]))+' HACHI', earned:fmt(fe(s[3]))+' HACHI', nextDist})
-      setRankList(list)
-    } catch(e) {}
+      nextDist = secs>0 ? `${d}d ${h}h (${nextDate})` : 'Disponible'
+    } catch(e: any) { log('ranking timeUntilNext err: '+(e?.message||'').slice(0,60)) }
+    setRankStats({points:fmt(myPts), pos, reward, earned, nextDist})
   }
 
   const loadPools = async (p: ethers.JsonRpcProvider) => {
