@@ -978,7 +978,11 @@ export default function HachiMiner() {
 
         {tab==='lock'&&<div>
           <div style={card}><div style={cTitle}>Tu posición</div>
-            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['APY pendiente',lockData.pending],['Próximo cobro en',lockData.nextClaimIn],['Próximo depósito en',lockData.nextDepositIn],['Disponible retirar',lockData.unstake]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+            <div style={{display:'flex',alignItems:'baseline',gap:8,margin:'8px 0 12px'}}>
+              <div style={{fontSize:24,fontWeight:700,fontFamily:'monospace',color:'#34d399'}}>{lockData.pending}</div>
+              <div style={{fontSize:12,color:'#8b949e'}}>HACHI APY pendiente</div>
+            </div>
+            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['Próximo cobro en',lockData.nextClaimIn],['Disponible retirar',lockData.unstake]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
             <button onClick={claimAPY} style={btnG}>Cobrar APY</button>
@@ -986,9 +990,20 @@ export default function HachiMiner() {
           </div>
           <div style={sLabel}>Depositar HACHI</div>
           <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
-          <button onClick={doDeposit} disabled={lockData.nextDepositSecs>0} style={{...btnP,opacity:lockData.nextDepositSecs>0?0.4:1}}>{lockData.nextDepositSecs>0?`Disponible en ${lockData.nextDepositIn}`:'Depositar'}</button>
+          <div style={{fontSize:11,color:'#d29922',marginBottom:8,lineHeight:1.4}}>⚠ Depositar reinicia el cooldown de 12h para cobrar APY</div>
+          <button onClick={doDeposit} style={btnP}>Depositar</button>
           <div style={sLabel}>Mis depósitos</div>
           {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
+          <div style={{...card,marginTop:12}}><div style={cTitle}>Niveles del Lock</div>
+            {[{name:'Akira',min:'50,000',apy:'10%'},{name:'Zen',min:'200,000',apy:'20%'},{name:'Koban',min:'500,000',apy:'30%'},{name:'Tayko',min:'750,000',apy:'40%'},{name:'Hachi',min:'1,000,000',apy:'50%'}].map(({name,min,apy})=>{
+              const isCurrent = lockData.tier === name
+              return <div key={name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 6px',borderRadius:6,marginBottom:2,background:isCurrent?'rgba(52,211,153,.08)':'transparent',border:isCurrent?'1px solid rgba(52,211,153,.3)':'1px solid transparent'}}>
+                <span style={{fontSize:13,fontWeight:isCurrent?700:400,color:isCurrent?'#34d399':'#8b949e'}}>{isCurrent?'→ ':''}{name}</span>
+                <span style={{fontFamily:'monospace',fontSize:11,color:'#8b949e'}}>{min} HACHI</span>
+                <span style={{fontFamily:'monospace',fontSize:12,fontWeight:600,color:isCurrent?'#fbbf24':'#6b7280'}}>{apy}</span>
+              </div>
+            })}
+          </div>
         </div>}
 
         {tab==='ranking'&&<div>
@@ -1021,7 +1036,16 @@ export default function HachiMiner() {
 
         {tab==='pools'&&<div>
           <div style={sLabel}>Estado de pools</div>
-          {[['💠 Pool WLD',[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']]],['🍣 Pool A — SUSHI',[['Total',poolsData.poolA||'—'],['Reservado',poolsData.poolAC||'—'],['Libre',poolsData.poolAF||'—'],['Licencias SUSHI disponibles',poolsData.sushiAvail||'—']]],['📊 Estadísticas',[['WLD recaudado',poolsData.wldSales||'—'],['Licencias WLD',poolsData.wldLics||'—'],['Licencias SUSHI',poolsData.sushiLics||'—'],['HACHI quemados',poolsData.burned||'—']]]].map(([title,rows]:any)=><div key={title} style={card}><div style={cTitle}>{title}</div>{rows.map(([l,v]:any)=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}</div>)}
+          <div style={card}><div style={cTitle}>💠 Pool WLD</div>
+            {[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
+          </div>
+          <div style={card}><div style={cTitle}>🍣 Pool A — SUSHI</div>
+            {[['Libre',poolsData.poolAF||'—'],['Licencias SUSHI disponibles',poolsData.sushiAvail||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
+          </div>
+          <div style={card}><div style={cTitle}>📊 Estadísticas</div>
+            {[['Licencias WLD vendidas',poolsData.wldLics||'—'],['Licencias SUSHI vendidas',poolsData.sushiLics||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
+            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>🔥 HACHI quemados</span><span style={{fontFamily:'monospace',color:'#f87171',fontWeight:600}}>{poolsData.burned||'—'}</span></div>
+          </div>
         </div>}
 
         {tab==='ads'&&<div>
