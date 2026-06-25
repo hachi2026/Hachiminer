@@ -88,6 +88,7 @@ const RANKING = [
   'function timeUntilNextExecution() view returns (uint256)',
   'function lastExecutedAt() view returns (uint256)',
   'function claimPrize()',
+  'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
 const ADMGR = [
   'function getActiveCampaigns() view returns (uint256[],string[],uint8[],uint256[],uint256[])',
@@ -222,8 +223,9 @@ export default function HachiMiner() {
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [depositAmt, setDepositAmt] = useState('')
-  const [rankStats, setRankStats] = useState({points:'0',pos:'—',reward:'0',earned:'0',nextDist:'—'})
+  const [rankStats, setRankStats] = useState({points:'0',totalHist:'0',pos:'—',reward:'0',earned:'0',nextDist:'—'})
   const [rankList, setRankList] = useState<any[]>([])
+  const [lastWinners, setLastWinners] = useState<{addr:string,amount:number,rank:number}[]>([])
   const [refInfo, setRefInfo] = useState({referrer:'',totalRefs:0,earned:'0 HACHI',refBonus:'500',newBonus:'500'})
   const [refInput, setRefInput] = useState('')
   const [poolsData, setPoolsData] = useState<any>({})
@@ -655,12 +657,13 @@ export default function HachiMiner() {
 
   const loadRanking = async (p: ethers.JsonRpcProvider) => {
     const r = new ethers.Contract(C.ranking, RANKING, p)
-    let myPts = 0, reward = '—', earned = '—', pos = '—', nextDist = '—'
+    let myPts = 0, totalHist = '0', reward = '—', earned = '—', pos = '—', nextDist = '—', lastExecTs = 0
     try {
       const s = await r.getUserStats(addr)
-      myPts  = Number(s[1])
-      reward = fmt(fe(s[2])) + ' HACHI'
-      earned = fmt(fe(s[3])) + ' HACHI'
+      myPts     = Number(s[0])
+      totalHist = fmt(Number(s[1])) + ' pts'
+      reward    = fmt(fe(s[2])) + ' HACHI'
+      earned    = fmt(fe(s[3])) + ' HACHI'
     } catch(e: any) { log('ranking getUserStats err: '+(e?.message||'').slice(0,60)) }
     try {
       const rk = await r.getCurrentRanking()
@@ -671,13 +674,37 @@ export default function HachiMiner() {
     } catch(e: any) { log('ranking getCurrentRanking err: '+(e?.message||'').slice(0,60)) }
     try {
       const [nextT, lastExec] = await Promise.all([r.timeUntilNextExecution(), r.lastExecutedAt()])
+      lastExecTs = Number(lastExec)
       const secs = Number(nextT), d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600)
       const nextDate = secs>0 ? new Date(Date.now()+secs*1000).toLocaleString('es',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
       if (secs > 0)              nextDist = `${d}d ${h}h (${nextDate})`
-      else if (Number(lastExec) === 0) nextDist = 'Primer reparto disponible'
+      else if (lastExecTs === 0) nextDist = 'Primer reparto disponible'
       else                       nextDist = 'Disponible'
     } catch(e: any) { log('ranking timeUntilNext err: '+(e?.message||'').slice(0,60)) }
-    setRankStats({points:fmt(myPts), pos, reward, earned, nextDist})
+    try {
+      if (lastExecTs > 0) {
+        const currentBlock = await p.getBlockNumber()
+        const blocksAgo = Math.ceil((Date.now()/1000 - lastExecTs) / 2)
+        const est = currentBlock - blocksAgo
+        const fromBlock = Math.max(0, est - 40)
+        const toBlock   = est + 40
+        log(`lastWinners range: from=${fromBlock} to=${toBlock} est=${est} blocksAgo=${blocksAgo}`)
+        const logs = await r.queryFilter('PrizePaid', fromBlock, toBlock)
+        log(`lastWinners raw logs: ${logs.length}`)
+        const winners = (logs as any[])
+          .map(l => ({addr: l.args[0], amount: Number(l.args[1])/1e18, rank: Number(l.args[2])}))
+          .filter(w => w.rank <= 10)
+          .sort((a,b) => a.rank - b.rank)
+        log(`lastWinners after filter: ${winners.length}`)
+        setLastWinners(winners)
+      } else {
+        log('lastWinners: lastExecTs=0, skipping')
+      }
+    } catch(e: any) {
+      log('lastWinners err: '+(e?.message||'').slice(0,80))
+      try { log('lastWinners err detail: '+JSON.stringify(e).slice(0,120)) } catch {}
+    }
+    setRankStats({points:fmt(myPts), totalHist, pos, reward, earned, nextDist})
   }
 
   const loadPools = async (p: ethers.JsonRpcProvider) => {
@@ -896,11 +923,6 @@ export default function HachiMiner() {
             <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras; pagás gas solo al retirar.</div>
           </div>
           <button onClick={()=>window.open(HACHI_BUY_URL,'_blank')} style={{...btnG,width:'100%',marginBottom:12}}>🪙 Comprar HACHI</button>
-          {debugMode&&logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,marginBottom:12}}>
-            <div style={{fontSize:10,color:'#f87171',marginBottom:4,fontWeight:700}}>DEBUG</div>
-            {logs.map((l,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:'#e6edf3',marginBottom:2}}>{l}</div>)}
-            <button onClick={()=>setLogs([])} style={{fontSize:10,color:'#8b949e',background:'none',border:'none',cursor:'pointer',marginTop:4}}>Limpiar</button>
-          </div>}
           {!connected&&<div style={{textAlign:'center',padding:'32px 16px',color:'#8b949e'}}>
             <div style={{fontSize:32,marginBottom:8}}>👋</div>
             <div style={{fontWeight:600,color:'#e6edf3',marginBottom:4}}>Bienvenido a HachiMiner</div>
@@ -982,7 +1004,7 @@ export default function HachiMiner() {
               <div style={{fontSize:24,fontWeight:700,fontFamily:'monospace',color:'#34d399'}}>{lockData.pending}</div>
               <div style={{fontSize:12,color:'#8b949e'}}>HACHI APY pendiente</div>
             </div>
-            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['Próximo cobro en',lockData.nextClaimIn],['Disponible retirar',lockData.unstake]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+            {[['Total lockeado',lockData.total],['Tier',lockData.tier],['APY anual',lockData.apy],['Próximo cobro en',lockData.nextClaimIn]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
             <button onClick={claimAPY} style={btnG}>Cobrar APY</button>
@@ -992,9 +1014,8 @@ export default function HachiMiner() {
           <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
           <div style={{fontSize:11,color:'#d29922',marginBottom:8,lineHeight:1.4}}>⚠ Depositar reinicia el cooldown de 24h para cobrar APY</div>
           <button onClick={doDeposit} style={btnP}>Depositar</button>
-          <div style={sLabel}>Mis depósitos</div>
-          {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
           <div style={{...card,marginTop:12}}><div style={cTitle}>Niveles del Lock</div>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:10,lineHeight:1.5}}>Con menos de 50,000 HACHI bloqueados (Sin tier) accedés a las licencias SUSHI Básicas, pero no generás APY. Desde 50,000 HACHI (Tier 1 — Akira) empezás a ganar rendimiento.</div>
             {[{name:'Akira',min:'50,000',apy:'10%'},{name:'Zen',min:'200,000',apy:'20%'},{name:'Koban',min:'500,000',apy:'30%'},{name:'Tayko',min:'750,000',apy:'40%'},{name:'Hachi',min:'1,000,000',apy:'50%'}].map(({name,min,apy})=>{
               const isCurrent = lockData.tier === name
               return <div key={name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 6px',borderRadius:6,marginBottom:2,background:isCurrent?'rgba(52,211,153,.08)':'transparent',border:isCurrent?'1px solid rgba(52,211,153,.3)':'1px solid transparent'}}>
@@ -1004,6 +1025,8 @@ export default function HachiMiner() {
               </div>
             })}
           </div>
+          <div style={sLabel}>Mis depósitos</div>
+          {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
         </div>}
 
         {tab==='ranking'&&<div>
@@ -1017,9 +1040,20 @@ export default function HachiMiner() {
             </div>
           })}
           <div style={card}><div style={cTitle}>Mis estadísticas</div>
-            {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned],['Próximo reparto (15 días)',rankStats.nextDist]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+            {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+            <div style={{fontSize:11,color:'#8b949e',marginTop:8}}>Próximo reparto: <span style={{color:'#fbbf24',fontWeight:600}}>{rankStats.nextDist}</span></div>
           </div>
           <button onClick={claimPrize} style={btnGo}>Cobrar premio</button>
+          {lastWinners.length>0&&<div style={card}>
+            <div style={cTitle}>🏆 Último reparto</div>
+            {lastWinners.map(({addr,amount,rank})=>(
+              <div key={rank} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:'1px solid #3b0764'}}>
+                <span style={{fontFamily:'monospace',fontWeight:700,width:28,color:'#fbbf24'}}>{rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`#${rank}`}</span>
+                <span style={{fontFamily:'monospace',fontSize:12,flex:1,color:'#c9d1d9'}}>{fmtA(addr)}</span>
+                <span style={{fontFamily:'monospace',fontSize:12,fontWeight:600,color:'#34d399'}}>{fmt(amount)} HACHI</span>
+              </div>
+            ))}
+          </div>}
           <div style={card}>
             <div style={cTitle}>¿Cómo se suman puntos?</div>
             <div style={{marginBottom:10}}>
@@ -1089,6 +1123,11 @@ export default function HachiMiner() {
           </>}
         </div>}
 
+      {debugMode&&logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,margin:'8px 0'}}>
+        <div style={{fontSize:10,color:'#f87171',marginBottom:4,fontWeight:700}}>DEBUG</div>
+        {logs.map((l,i)=><div key={i} style={{fontFamily:'monospace',fontSize:10,color:'#e6edf3',marginBottom:2}}>{l}</div>)}
+        <button onClick={()=>setLogs([])} style={{fontSize:10,color:'#8b949e',background:'none',border:'none',cursor:'pointer',marginTop:4}}>Limpiar</button>
+      </div>}
       </div>
     </div>
   )
