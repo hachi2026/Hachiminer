@@ -120,10 +120,10 @@ const LOGIN = {
     whatTitle: '¿Qué es HachiMiner?',
     whatDesc: 'HachiMiner es una mini app de World que te permite minar tokens HACHI y operar con licencias WLD y Bocado directamente en World Chain. Compra licencias, bloquea tokens para ganar APY, participa en el ranking y deja que Hachi ahorre HACHI por vos en su alcancía.',
     features: [
-      { icon:'📜', title:'Licencias', desc:'Compra licencias WLD y Bocado para generar HACHI diario.' },
+      { icon:'📜', title:'Licencias', desc:'Compra tu licencia WLD y obtén beneficios adicionales en Bocados según tu nivel — a mayor nivel, mayor acceso.' },
       { icon:'🔒', title:'Lock & APY', desc:'Bloquea HACHI y gana rendimiento sobre tu posición.' },
       { icon:'🏆', title:'Ranking', desc:'Compite por premios según tu actividad.' },
-      { icon:'🐱', title:'La alcancía de Hachi', desc:'Hachi ahorra HACHI por vos sin gas; retirá al juntar 500.' },
+      { icon:'🐱', title:'Reúne y cobra tus HACHI', desc:'Hachi acumula HACHI por vos automáticamente. Retirá cuando quieras; hay un cooldown de 24h entre retiros.' },
     ],
     stepsTitle: 'Cómo empezar',
     steps: [
@@ -140,10 +140,10 @@ const LOGIN = {
     whatTitle: 'What is HachiMiner?',
     whatDesc: 'HachiMiner is a World mini app that lets you mine HACHI tokens and trade WLD and Bocado licenses directly on World Chain. Buy licenses, lock tokens to earn APY, climb the ranking, and let Hachi save HACHI for you in his piggy bank.',
     features: [
-      { icon:'📜', title:'Licenses', desc:'Buy WLD and Bocado licenses to generate daily HACHI.' },
+      { icon:'📜', title:'Licenses', desc:'Buy your WLD license and get extra Bocado benefits based on your tier — higher tier, greater access.' },
       { icon:'🔒', title:'Lock & APY', desc:'Lock HACHI and earn yield on your position.' },
       { icon:'🏆', title:'Ranking', desc:'Compete for prizes based on your activity.' },
-      { icon:'🐱', title:'Hachi\'s piggy bank', desc:'Hachi saves HACHI for you with no gas; withdraw at 500.' },
+      { icon:'🐱', title:'Collect your HACHI', desc:'Hachi accumulates HACHI for you automatically. Withdraw whenever you want; there\'s a 24h cooldown between withdrawals.' },
     ],
     stepsTitle: 'How to start',
     steps: [
@@ -160,10 +160,10 @@ const LOGIN = {
     whatTitle: 'O que é o HachiMiner?',
     whatDesc: 'O HachiMiner é um mini app da World que permite minerar tokens HACHI e operar com licenças WLD e Bocado diretamente na World Chain. Compre licenças, bloqueie tokens para ganhar APY, suba no ranking e deixe o Hachi guardar HACHI por você no cofrinho dele.',
     features: [
-      { icon:'📜', title:'Licenças', desc:'Compre licenças WLD e Bocado para gerar HACHI diário.' },
+      { icon:'📜', title:'Licenças', desc:'Compre sua licença WLD e obtenha benefícios extras em Bocados conforme seu nível — quanto maior o nível, maior o acesso.' },
       { icon:'🔒', title:'Lock & APY', desc:'Bloqueie HACHI e ganhe rendimento na sua posição.' },
       { icon:'🏆', title:'Ranking', desc:'Concorra a prêmios conforme sua atividade.' },
-      { icon:'🐱', title:'Cofrinho do Hachi', desc:'O Hachi guarda HACHI por você sem gas; saque ao juntar 500.' },
+      { icon:'🐱', title:'Reúna e resgate seus HACHI', desc:'O Hachi acumula HACHI por você automaticamente. Saque quando quiser; há um cooldown de 24h entre saques.' },
     ],
     stepsTitle: 'Como começar',
     steps: [
@@ -295,7 +295,7 @@ export default function HachiMiner() {
     if (hachiSushi <= 0) return
     const sushiBase = [500,2000,5000,10000][selSUSHI] * hachiSushi
     const total     = sushiBase * 1.25
-    setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' Bocado', total:fmt(Math.round(total))+' Bocado'}))
+    setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' SUSHI', total:fmt(Math.round(total))+' SUSHI'}))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selSUSHI, hachiSushi])
 
@@ -971,23 +971,6 @@ export default function HachiMiner() {
               <div style={{fontSize:13,color:'#8b949e'}}>{t('access_desc')}</div>
             </div>}
             {sushiAccess&&<>
-              {(()=>{
-                const tierLabel = wldTierActive===255?'Sin licencia WLD':['Básica','Estándar','Premium','Elite'][wldTierActive]??'—'
-                const maxBasic  = wldTierActive===255?1:wldTierActive===0?2:wldTierActive===1?3:wldTierActive===2?4:5
-                const specialType = wldTierActive===0?'Básica adicional':wldTierActive===1?'Estándar':wldTierActive===2?'Premium':wldTierActive===3?'Elite':null
-                return (
-                  <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12}}>
-                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
-                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>Básicas hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
-                    {specialType&&(()=>{
-                      if (specialAvail) return <div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:'#3fb950',fontWeight:600}}>{`✓ Disponible · ${specialType}`}</span></div>
-                      const secsLeft = Math.max(0, lastSpecialTs + 5*86400 - Math.floor(Date.now()/1000))
-                      const sd=Math.floor(secsLeft/86400), sh=Math.floor((secsLeft%86400)/3600)
-                      return <div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:'#d29922',fontWeight:600}}>{`Disponible en ${sd}d ${sh}h`}</span></div>
-                    })()}
-                  </div>
-                )
-              })()}
               <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-cat-savings.png" alt="" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />Convertí tus HACHI en Bocado</div>
               {(()=>{
                 const specialIdx = wldTierActive===255?null:wldTierActive===0?0:wldTierActive
@@ -1003,16 +986,33 @@ export default function HachiMiner() {
                       <div style={{fontSize:11,fontWeight:700}}>{sushiNames[c.idx]}</div>
                       {c.label&&<div style={{fontSize:10,fontWeight:600,color:specialAvail?'#34d399':'#d29922',marginBottom:2}}>{c.label}</div>}
                       <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([500,2000,5000,10000][c.idx]*hachiSushi*1.25))}</div>
-                      <div style={{fontSize:10,color:'#8b949e'}}>Bocado inmediato ×1.25</div>
+                      <div style={{fontSize:10,color:'#8b949e'}}>SUSHI inmediato ×1.25</div>
                       <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[c.idx]}</div>
                     </div>)}
                   </div>
                 )
               })()}
-                <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['Bocado base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total],['Disponibles hoy',sushiPrev.dailyLeft]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+              <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
               <button onClick={buySUSHI} style={btnG}>{`Comprar · ${sushiPrices[selSUSHI]}`}</button>
+              {(()=>{
+                const tierLabel = wldTierActive===255?'Sin licencia WLD':['Básica','Estándar','Premium','Elite'][wldTierActive]??'—'
+                const maxBasic  = wldTierActive===255?1:wldTierActive===0?2:wldTierActive===1?3:wldTierActive===2?4:5
+                const specialType = wldTierActive===0?'Básica adicional':wldTierActive===1?'Estándar':wldTierActive===2?'Premium':wldTierActive===3?'Elite':null
+                return (
+                  <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginTop:12,fontSize:12}}>
+                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
+                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>Básicas hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
+                    {specialType&&(()=>{
+                      if (specialAvail) return <div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:'#3fb950',fontWeight:600}}>{`✓ Disponible · ${specialType}`}</span></div>
+                      const secsLeft = Math.max(0, lastSpecialTs + 5*86400 - Math.floor(Date.now()/1000))
+                      const sd=Math.floor(secsLeft/86400), sh=Math.floor((secsLeft%86400)/3600)
+                      return <div style={row}><span style={{color:'#8b949e'}}>Especial (c/5 días)</span><span style={{color:'#d29922',fontWeight:600}}>{`Disponible en ${sd}d ${sh}h`}</span></div>
+                    })()}
+                  </div>
+                )
+              })()}
               <div style={{background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:12,marginTop:12,fontSize:12,color:'#8b949e',lineHeight:1.5}}>
-                <strong style={{color:'#34d399'}}>Intercambio inmediato:</strong> pagás en HACHI y recibís el Bocado (base + 25%) al instante en tu wallet. Sin esperas ni cobros pendientes.
+                <strong style={{color:'#34d399'}}>Intercambio inmediato:</strong> pagás en HACHI y recibís SUSHI (base + 25%) al instante en tu wallet. Sin esperas ni cobros pendientes.
               </div>
             </>}
           </div>}
