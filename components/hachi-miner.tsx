@@ -118,9 +118,9 @@ const LOGIN = {
   es: {
     tagline: 'Minería de HACHI verificada con World ID en World Chain',
     whatTitle: '¿Qué es HachiMiner?',
-    whatDesc: 'HachiMiner es una mini app de World que te permite minar tokens HACHI y operar con licencias WLD y SUSHI directamente en World Chain. Compra licencias, bloquea tokens para ganar APY, participa en el ranking y deja que Hachi ahorre HACHI por vos en su alcancía.',
+    whatDesc: 'HachiMiner es una mini app de World que te permite minar tokens HACHI y operar con licencias WLD y Bocado directamente en World Chain. Compra licencias, bloquea tokens para ganar APY, participa en el ranking y deja que Hachi ahorre HACHI por vos en su alcancía.',
     features: [
-      { icon:'📜', title:'Licencias', desc:'Compra licencias WLD y SUSHI para generar HACHI diario.' },
+      { icon:'📜', title:'Licencias', desc:'Compra licencias WLD y Bocado para generar HACHI diario.' },
       { icon:'🔒', title:'Lock & APY', desc:'Bloquea HACHI y gana rendimiento sobre tu posición.' },
       { icon:'🏆', title:'Ranking', desc:'Compite por premios según tu actividad.' },
       { icon:'🐱', title:'La alcancía de Hachi', desc:'Hachi ahorra HACHI por vos sin gas; retirá al juntar 500.' },
@@ -138,9 +138,9 @@ const LOGIN = {
   en: {
     tagline: 'World ID-verified HACHI mining on World Chain',
     whatTitle: 'What is HachiMiner?',
-    whatDesc: 'HachiMiner is a World mini app that lets you mine HACHI tokens and trade WLD and SUSHI licenses directly on World Chain. Buy licenses, lock tokens to earn APY, climb the ranking, and let Hachi save HACHI for you in his piggy bank.',
+    whatDesc: 'HachiMiner is a World mini app that lets you mine HACHI tokens and trade WLD and Bocado licenses directly on World Chain. Buy licenses, lock tokens to earn APY, climb the ranking, and let Hachi save HACHI for you in his piggy bank.',
     features: [
-      { icon:'📜', title:'Licenses', desc:'Buy WLD and SUSHI licenses to generate daily HACHI.' },
+      { icon:'📜', title:'Licenses', desc:'Buy WLD and Bocado licenses to generate daily HACHI.' },
       { icon:'🔒', title:'Lock & APY', desc:'Lock HACHI and earn yield on your position.' },
       { icon:'🏆', title:'Ranking', desc:'Compete for prizes based on your activity.' },
       { icon:'🐱', title:'Hachi\'s piggy bank', desc:'Hachi saves HACHI for you with no gas; withdraw at 500.' },
@@ -158,9 +158,9 @@ const LOGIN = {
   pt: {
     tagline: 'Mineração de HACHI verificada com World ID na World Chain',
     whatTitle: 'O que é o HachiMiner?',
-    whatDesc: 'O HachiMiner é um mini app da World que permite minerar tokens HACHI e operar com licenças WLD e SUSHI diretamente na World Chain. Compre licenças, bloqueie tokens para ganhar APY, suba no ranking e deixe o Hachi guardar HACHI por você no cofrinho dele.',
+    whatDesc: 'O HachiMiner é um mini app da World que permite minerar tokens HACHI e operar com licenças WLD e Bocado diretamente na World Chain. Compre licenças, bloqueie tokens para ganhar APY, suba no ranking e deixe o Hachi guardar HACHI por você no cofrinho dele.',
     features: [
-      { icon:'📜', title:'Licenças', desc:'Compre licenças WLD e SUSHI para gerar HACHI diário.' },
+      { icon:'📜', title:'Licenças', desc:'Compre licenças WLD e Bocado para gerar HACHI diário.' },
       { icon:'🔒', title:'Lock & APY', desc:'Bloqueie HACHI e ganhe rendimento na sua posição.' },
       { icon:'🏆', title:'Ranking', desc:'Concorra a prêmios conforme sua atividade.' },
       { icon:'🐱', title:'Cofrinho do Hachi', desc:'O Hachi guarda HACHI por você sem gas; saque ao juntar 500.' },
@@ -295,7 +295,7 @@ export default function HachiMiner() {
     if (hachiSushi <= 0) return
     const sushiBase = [500,2000,5000,10000][selSUSHI] * hachiSushi
     const total     = sushiBase * 1.25
-    setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' SUSHI', total:fmt(Math.round(total))+' SUSHI'}))
+    setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' Bocado', total:fmt(Math.round(total))+' Bocado'}))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selSUSHI, hachiSushi])
 
@@ -393,8 +393,8 @@ export default function HachiMiner() {
       const r = await new ethers.Contract(C.oracle,ORACLE,p).getRates()
       const wh=fe(r[0]),hs=fe(r[1])
       setWldHachi(wh); setHachiSushi(hs); setOracleSt(r[3]?'Manual':'DEX en vivo ✓'); setPriceAlert(wh>MAX_HACHI)
-      const av = await new ethers.Contract(C.core,CORE,p).getWLDAvailability()
-      const hf=fe(av[0]), costPerLic=wh*1.30, lb=costPerLic>0?Math.floor(hf/costPerLic):0
+      const ws = await new ethers.Contract(C.poolWLD,POOLWLD,p).getPoolStatus()
+      const hf=fe(ws[1]), costPerLic=wh*1.30, lb=costPerLic>0?Math.floor(hf/costPerLic):0
       setPoolFree(fmt(hf)+' HACHI'); setLicsAvail(lb>0?lb+' lics. básicas':'0 (sin fondos)')
     } catch(e) {}
   }
@@ -574,13 +574,13 @@ export default function HachiMiner() {
     const hachiNeeded = [500,2000,5000,10000][selSUSHI]
     if (hachiRaw < hachiNeeded) { toast_(`Sin saldo HACHI. Comprá HACHI: ${HACHI_BUY_URL}`,'#f85149'); return }
     try {
-      toast_('Comprando licencia SUSHI...', '#d29922')
+      toast_('Comprando Bocado...', '#d29922')
       const amt = [pe(500),pe(2000),pe(5000),pe(10000)][selSUSHI]
       await sendTxMulti([
         ...buildPermit2Approvals(C.hachi, C.core, amt),
         { to: C.core, abi: CORE, fnName: 'buyLicenseSushi', args: [selSUSHI] },
       ])
-      toast_('✓ Licencia SUSHI comprada', '#3fb950')
+      toast_('✓ Bocado comprado', '#3fb950')
       await loadAll(addr)
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
@@ -733,8 +733,8 @@ export default function HachiMiner() {
   // when loadPools and loadOracle run in parallel (loadAll) or when loadPools runs alone (loadTab).
   let localLicsAvail = '—'
   try {
-    const [av, r] = await Promise.all([core.getWLDAvailability(), new ethers.Contract(C.oracle,ORACLE,p).getRates()])
-    const hf=fe(av[0]), wh=fe(r[0]), costPerLic=wh*1.30
+    const r = await new ethers.Contract(C.oracle,ORACLE,p).getRates()
+    const hf=fe(ws[1]), wh=fe(r[0]), costPerLic=wh*1.30
     const n = costPerLic>0 ? Math.floor(hf/costPerLic) : 0
     localLicsAvail = n > 0 ? n + ' lics. básicas' : '0 (sin fondos)'
   } catch(e) {}
@@ -799,7 +799,7 @@ export default function HachiMiner() {
 
   const wldNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
   const wldPrices = ['1 WLD','3 WLD','5 WLD','10 WLD']
-  const sushiNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
+  const sushiNames = ['🌱 Bocado','⚡ Bocado Doble','💎 Bocado Grande','🚀 Bocado Real']
   const sushiPrices = ['500 HACHI','2,000 HACHI','5,000 HACHI','10,000 HACHI']
 
   // PANTALLA DE INICIO DE SESIÓN — se muestra mientras no haya wallet conectada
@@ -906,7 +906,7 @@ export default function HachiMiner() {
           <div style={card}><div style={cTitle}>Estado del sistema</div>
             {[['Oracle',oracleSt],['1 WLD =',fmt(wldHachi)+' HACHI'],['1 HACHI =',hachiSushi.toFixed(4)+' SUSHI'],['Pool WLD disponible',poolFree],['Licencias WLD disponibles',licsAvail],['Máximo HACHI/WLD',MAX_HACHI.toLocaleString()]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
-          <div style={card}><div style={cTitle}>La alcancía de Hachi</div>
+          <div style={card}><div style={cTitle}>HACHI</div>
             <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
               <img src="/hachi-cat-savings.png" alt="Hachi el gato ahorrando monedas HACHI" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />
               <div style={{flex:1}}>
@@ -942,7 +942,7 @@ export default function HachiMiner() {
         {tab==='lics'&&<div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
             <button onClick={()=>setLicTab('wld')} style={licTab==='wld'?btnP:btnGh}>💠 WLD</button>
-            <button onClick={()=>setLicTab('sushi')} style={licTab==='sushi'?{...btnG,background:'transparent'}:btnGh}>🍣 SUSHI</button>
+            <button onClick={()=>setLicTab('sushi')} style={{...(licTab==='sushi'?{...btnG,background:'transparent'}:btnGh),display:'flex',alignItems:'center',gap:6,justifyContent:'center'}}><img src="/hachi-cat-savings.png" width={20} height={20} style={{borderRadius:4,objectFit:'cover',flexShrink:0}} />Bocado</button>
           </div>
           {licTab==='wld'&&<div>
             <div style={sLabel}>Comprar licencia WLD</div>
@@ -988,7 +988,7 @@ export default function HachiMiner() {
                   </div>
                 )
               })()}
-              <div style={sLabel}>Comprar licencia HACHI/SUSHI</div>
+              <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-cat-savings.png" alt="" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />Convertí tus HACHI en Bocado</div>
               {(()=>{
                 const specialIdx = wldTierActive===255?null:wldTierActive===0?0:wldTierActive
                 const secsLeft = Math.max(0, lastSpecialTs + 5*86400 - Math.floor(Date.now()/1000))
@@ -1003,16 +1003,16 @@ export default function HachiMiner() {
                       <div style={{fontSize:11,fontWeight:700}}>{sushiNames[c.idx]}</div>
                       {c.label&&<div style={{fontSize:10,fontWeight:600,color:specialAvail?'#34d399':'#d29922',marginBottom:2}}>{c.label}</div>}
                       <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([500,2000,5000,10000][c.idx]*hachiSushi*1.25))}</div>
-                      <div style={{fontSize:10,color:'#8b949e'}}>SUSHI inmediato ×1.25</div>
+                      <div style={{fontSize:10,color:'#8b949e'}}>Bocado inmediato ×1.25</div>
                       <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[c.idx]}</div>
                     </div>)}
                   </div>
                 )
               })()}
-                <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total],['Disponibles hoy',sushiPrev.dailyLeft]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+                <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['Bocado base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total],['Disponibles hoy',sushiPrev.dailyLeft]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
               <button onClick={buySUSHI} style={btnG}>{`Comprar · ${sushiPrices[selSUSHI]}`}</button>
               <div style={{background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:12,marginTop:12,fontSize:12,color:'#8b949e',lineHeight:1.5}}>
-                <strong style={{color:'#34d399'}}>Intercambio inmediato:</strong> pagás en HACHI y recibís el SUSHI (base + 25%) al instante en tu wallet. Sin esperas ni cobros pendientes.
+                <strong style={{color:'#34d399'}}>Intercambio inmediato:</strong> pagás en HACHI y recibís el Bocado (base + 25%) al instante en tu wallet. Sin esperas ni cobros pendientes.
               </div>
             </>}
           </div>}
@@ -1035,7 +1035,7 @@ export default function HachiMiner() {
           <div style={{fontSize:11,color:'#d29922',marginBottom:8,lineHeight:1.4}}>⚠ Depositar reinicia el cooldown de 24h para cobrar APY</div>
           <button onClick={doDeposit} style={btnP}>Depositar</button>
           <div style={{...card,marginTop:12}}><div style={cTitle}>Niveles del Lock</div>
-            <div style={{fontSize:11,color:'#8b949e',marginBottom:10,lineHeight:1.5}}>Con menos de 50,000 HACHI bloqueados (Sin tier) accedés a las licencias SUSHI Básicas, pero no generás APY. Desde 50,000 HACHI (Tier 1 — Akira) empezás a ganar rendimiento.</div>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:10,lineHeight:1.5}}>Con menos de 50,000 HACHI bloqueados (Sin tier) accedés a las licencias Bocado Básicas, pero no generás APY. Desde 50,000 HACHI (Tier 1 — Akira) empezás a ganar rendimiento.</div>
             {[{name:'Akira',min:'50,000',apy:'10%'},{name:'Zen',min:'200,000',apy:'20%'},{name:'Koban',min:'500,000',apy:'30%'},{name:'Tayko',min:'750,000',apy:'40%'},{name:'Hachi',min:'1,000,000',apy:'50%'}].map(({name,min,apy})=>{
               const isCurrent = lockData.tier === name
               return <div key={name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 6px',borderRadius:6,marginBottom:2,background:isCurrent?'rgba(52,211,153,.08)':'transparent',border:isCurrent?'1px solid rgba(52,211,153,.3)':'1px solid transparent'}}>
@@ -1078,7 +1078,7 @@ export default function HachiMiner() {
             <div style={cTitle}>¿Cómo se suman puntos?</div>
             <div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:700,color:'#34d399',marginBottom:4,letterSpacing:.5}}>✓ SUMAN PUNTOS</div>
-              {[['💰','Cobrar HACHI de licencia WLD'],['🍣','Comprar licencia SUSHI'],['🐱','Retirar de la alcancía'],['📢','Participar en anuncios'],['📈','Cobrar APY del Lock'],['👥','Registrar un referido (vos y tu referido)']].map(([icon,text])=><div key={text} style={{display:'flex',alignItems:'flex-start',gap:6,padding:'4px 0',borderBottom:'1px solid #3b0764'}}><span style={{flexShrink:0,fontSize:13}}>{icon}</span><span style={{fontSize:12,color:'#c9d1d9',lineHeight:1.4}}>{text}</span></div>)}
+              {[['💰','Cobrar HACHI de licencia WLD'],['bocado','Comprar Bocado'],['🐱','Retirar de la alcancía'],['📢','Participar en anuncios'],['📈','Cobrar APY del Lock'],['👥','Registrar un referido (vos y tu referido)']].map(([icon,text])=><div key={text} style={{display:'flex',alignItems:'flex-start',gap:6,padding:'4px 0',borderBottom:'1px solid #3b0764'}}><span style={{flexShrink:0,fontSize:13,display:'flex',alignItems:'center'}}>{icon==='bocado'?<img src="/hachi-cat-savings.png" width={16} height={16} style={{borderRadius:3,objectFit:'cover'}} />:icon}</span><span style={{fontSize:12,color:'#c9d1d9',lineHeight:1.4}}>{text}</span></div>)}
             </div>
             <div style={{marginBottom:10}}>
               <div style={{fontSize:11,fontWeight:700,color:'#f87171',marginBottom:4,letterSpacing:.5}}>✗ NO SUMAN PUNTOS</div>
@@ -1093,11 +1093,11 @@ export default function HachiMiner() {
           <div style={card}><div style={cTitle}>💠 Pool WLD</div>
             {[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
           </div>
-          <div style={card}><div style={cTitle}>🍣 Pool A — SUSHI</div>
-            {[['Libre',poolsData.poolAF||'—'],['Licencias SUSHI disponibles',poolsData.sushiAvail||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
+          <div style={card}><div style={{...cTitle,display:'flex',alignItems:'center',gap:6}}><img src="/hachi-cat-savings.png" width={20} height={20} style={{borderRadius:4,objectFit:'cover',flexShrink:0}} />Pool A — Bocado</div>
+            {[['Libre',poolsData.poolAF||'—'],['Licencias Bocado disponibles',poolsData.sushiAvail||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
           </div>
           <div style={card}><div style={cTitle}>📊 Estadísticas</div>
-            {[['Licencias WLD vendidas',poolsData.wldLics||'—'],['Licencias SUSHI vendidas',poolsData.sushiLics||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
+            {[['Licencias WLD vendidas',poolsData.wldLics||'—'],['Licencias Bocado vendidas',poolsData.sushiLics||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
             <div style={row}><span style={{color:'#8b949e',fontSize:12}}>🔥 HACHI quemados</span><span style={{fontFamily:'monospace',color:'#f87171',fontWeight:600}}>{poolsData.burned||'—'}</span></div>
           </div>
         </div>}
@@ -1122,9 +1122,9 @@ export default function HachiMiner() {
 
         {tab==='refs'&&<div>
           <div style={card}><div style={cTitle}>Mi código de referido</div>
-            <div style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontFamily:'monospace',fontSize:12,wordBreak:'break-all',marginBottom:8}}>{addr||'Conecta tu wallet'}</div>
+            <div style={{color:'#8b949e',fontSize:12,marginBottom:8}}>{addr?'✓ Tu código está listo para compartir':'Conecta tu wallet para ver tu código'}</div>
             <button onClick={()=>{navigator.clipboard.writeText(addr);toast_('Código copiado','#3fb950')}} style={btnGh}>Copiar código</button>
-            {(()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;return(<><button onClick={async()=>{if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>{addr&&<div style={{fontSize:10,color:'#8b949e',fontFamily:'monospace',marginTop:4,wordBreak:'break-all'}}>{`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=/?ref=${fmtA(addr)}`}</div>}</>)})()}
+            {(()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;return(<button onClick={async()=>{if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>)})()}
             <div style={pBox}>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Mis referidos</span><span style={{fontFamily:'monospace',fontWeight:600}}>{refInfo.totalRefs}</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI ganado</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.earned}</span></div>
