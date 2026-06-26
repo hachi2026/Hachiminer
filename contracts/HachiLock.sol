@@ -48,8 +48,7 @@ contract HachiLock is ReentrancyGuard {
 
     // --- CONSTANTES ------------------------------------------
     uint256 public constant MIN_LOCK_DAYS   = 15 days;
-    uint256 public constant DEPOSIT_COOLDOWN = 12 hours;
-    uint256 public constant CLAIM_COOLDOWN   = 12 hours;
+    uint256 public constant CLAIM_COOLDOWN   = 24 hours;
     uint256 public constant UNSTAKE_COOLDOWN = 24 hours;
     uint256 public constant MIN_SUSHI_LIC    = 5_000 * 1e18; // minimo para licencias SUSHI
     uint256 public constant YEAR_SECONDS     = 365 days;
@@ -140,13 +139,7 @@ contract HachiLock is ReentrancyGuard {
 
         Position storage p = positions[msg.sender];
 
-        // Cooldown de 12h entre depositos
         if (p.active) {
-            require(
-                block.timestamp >= p.lastDepositTime + DEPOSIT_COOLDOWN,
-                "Deposit cooldown: 12 hours"
-            );
-            // Acumular APY pendiente antes de cambiar el saldo
             _accrueAPY(msg.sender);
         }
 
@@ -318,8 +311,7 @@ contract HachiLock is ReentrancyGuard {
             : p.accruedHachi;
         tier             = p.tier;
         apyPercent       = _tierAPY(p.tier);
-        nextDepositIn    = p.active && now_ < p.lastDepositTime + DEPOSIT_COOLDOWN
-            ? (p.lastDepositTime + DEPOSIT_COOLDOWN) - now_ : 0;
+        nextDepositIn    = 0;
         nextClaimIn      = p.active && now_ < p.lastClaimTime + CLAIM_COOLDOWN
             ? (p.lastClaimTime + CLAIM_COOLDOWN) - now_ : 0;
         nextUnstakeIn    = p.active && now_ < p.lastUnstakeTime + UNSTAKE_COOLDOWN
