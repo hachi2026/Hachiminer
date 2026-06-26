@@ -295,7 +295,7 @@ export default function HachiMiner() {
     if (hachiSushi <= 0) return
     const sushiBase = [500,2000,5000,10000][selSUSHI] * hachiSushi
     const total     = sushiBase * 1.25
-    setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' SUSHI', total:fmt(Math.round(total))+' SUSHI'}))
+    setSushiPrev(p => ({...p, base:Math.round(sushiBase).toLocaleString()+' SUSHI', total:Math.round(total).toLocaleString()+' SUSHI'}))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selSUSHI, hachiSushi])
 
