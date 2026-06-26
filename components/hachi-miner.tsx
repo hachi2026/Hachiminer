@@ -989,14 +989,26 @@ export default function HachiMiner() {
                 )
               })()}
               <div style={sLabel}>Comprar licencia HACHI/SUSHI</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-                {sushiNames.map((n,i)=><div key={i} onClick={()=>setSelSUSHI(i)} style={{...lCard,border:`1px solid ${selSUSHI===i?'#fbbf24':'#5b21b6'}`,background:selSUSHI===i?'rgba(251,191,36,.08)':'#1e0840'}}>
-                  <div style={{fontSize:11,fontWeight:700}}>{n}</div>
-                  <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([500,2000,5000,10000][i]*hachiSushi*1.25))}</div>
-                  <div style={{fontSize:10,color:'#8b949e'}}>SUSHI inmediato ×1.25</div>
-                  <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[i]}</div>
-                </div>)}
-              </div>
+              {(()=>{
+                const specialIdx = wldTierActive===255?null:wldTierActive===0?0:wldTierActive
+                const secsLeft = Math.max(0, lastSpecialTs + 5*86400 - Math.floor(Date.now()/1000))
+                const sd=Math.floor(secsLeft/86400), sh=Math.floor((secsLeft%86400)/3600)
+                const cards:{idx:number,special:boolean,label:string|null,disabled:boolean}[] = [
+                  {idx:0, special:false, label:null, disabled:false},
+                  ...(specialIdx!==null?[{idx:specialIdx, special:true, label:specialAvail?'✨ Especial disponible':`⏳ Disponible en ${sd}d ${sh}h`, disabled:!specialAvail}]:[])
+                ]
+                return(
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+                    {cards.map((c,ci)=><div key={ci} onClick={c.disabled?undefined:()=>setSelSUSHI(c.idx)} style={{...lCard,border:`1px solid ${selSUSHI===c.idx&&!c.disabled?'#fbbf24':'#5b21b6'}`,background:c.disabled?'rgba(30,8,64,.5)':selSUSHI===c.idx?'rgba(251,191,36,.08)':'#1e0840',opacity:c.disabled?.5:1,cursor:c.disabled?'default':'pointer'}}>
+                      <div style={{fontSize:11,fontWeight:700}}>{sushiNames[c.idx]}</div>
+                      {c.label&&<div style={{fontSize:10,fontWeight:600,color:specialAvail?'#34d399':'#d29922',marginBottom:2}}>{c.label}</div>}
+                      <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([500,2000,5000,10000][c.idx]*hachiSushi*1.25))}</div>
+                      <div style={{fontSize:10,color:'#8b949e'}}>SUSHI inmediato ×1.25</div>
+                      <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[c.idx]}</div>
+                    </div>)}
+                  </div>
+                )
+              })()}
                 <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total],['Disponibles hoy',sushiPrev.dailyLeft]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
               <button onClick={buySUSHI} style={btnG}>{`Comprar · ${sushiPrices[selSUSHI]}`}</button>
               <div style={{background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:12,marginTop:12,fontSize:12,color:'#8b949e',lineHeight:1.5}}>
@@ -1112,7 +1124,7 @@ export default function HachiMiner() {
           <div style={card}><div style={cTitle}>Mi código de referido</div>
             <div style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontFamily:'monospace',fontSize:12,wordBreak:'break-all',marginBottom:8}}>{addr||'Conecta tu wallet'}</div>
             <button onClick={()=>{navigator.clipboard.writeText(addr);toast_('Código copiado','#3fb950')}} style={btnGh}>Copiar código</button>
-            <button onClick={async()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>
+            {(()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;return(<><button onClick={async()=>{if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>{addr&&<div style={{fontSize:10,color:'#8b949e',fontFamily:'monospace',marginTop:4,wordBreak:'break-all'}}>{`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=/?ref=${fmtA(addr)}`}</div>}</>)})()}
             <div style={pBox}>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Mis referidos</span><span style={{fontFamily:'monospace',fontWeight:600}}>{refInfo.totalRefs}</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI ganado</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.earned}</span></div>
