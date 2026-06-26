@@ -227,7 +227,6 @@ export default function HachiMiner() {
   const [rankList, setRankList] = useState<any[]>([])
   const [lastWinners, setLastWinners] = useState<{addr:string,amount:number,rank:number}[]>([])
   const [refInfo, setRefInfo] = useState({referrer:'',totalRefs:0,earned:'0 HACHI',refBonus:'500',newBonus:'500'})
-  const [refInput, setRefInput] = useState('')
   const [refFromLink, setRefFromLink] = useState('')
   const [poolsData, setPoolsData] = useState<any>({})
   const [logs, setLogs] = useState<string[]>([])
@@ -299,10 +298,6 @@ export default function HachiMiner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selSUSHI, hachiSushi])
 
-  useEffect(() => {
-    if (refFromLink && !refInput) setRefInput(refFromLink)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refFromLink])
 
   // Devuelve la dirección conectada o '' si falla
   const connectMiniKit = async (): Promise<string> => {
@@ -773,14 +768,14 @@ export default function HachiMiner() {
     } catch(e) {}
   }
   const registerReferral = async () => {
-    const ref = refInput.trim()
-    if (!ethers.isAddress(ref)) { toast_('Dirección de referidor inválida','#f85149'); return }
+    const ref = refFromLink.trim()
+    if (!ethers.isAddress(ref)) { toast_('Link de invitación inválido','#f85149'); return }
     try {
       const rf = new ethers.Contract(C.referral,REFERRAL,rpc())
       const [ok,reason] = await rf.canRegister(addr,ref)
       if (!ok) { toast_(reason||'No podés registrarte','#f85149'); return }
       await execTx('Registrando referido',C.referral,REFERRAL,'registerWithReferral',[ref])
-      setRefInput(''); loadRefs(rpc())
+      loadRefs(rpc())
     } catch(e:any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80),'#f85149') }
   }
   const createCampaign = async () => {
@@ -1134,14 +1129,20 @@ export default function HachiMiner() {
             <div style={card}><div style={cTitle}>Ya tenés referidor</div>
               <div style={{fontFamily:'monospace',fontSize:12,wordBreak:'break-all',color:'#a78bfa'}}>{refInfo.referrer}</div>
             </div>
-          :<>
-            <div style={sLabel}>Registrar referido</div>
+          : refFromLink ?
+            <>
+              <div style={sLabel}>Registrar referido</div>
+              <div style={card}>
+                <div style={{fontSize:12,color:'#8b949e',marginBottom:8}}>Te invitó: <span style={{fontFamily:'monospace',color:'#a78bfa',fontWeight:600}}>{fmtA(refFromLink)}</span></div>
+                <div style={pBox}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Recibís</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.newBonus} HACHI</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu referidor recibe</span><span style={{color:'#a78bfa',fontFamily:'monospace'}}>{refInfo.refBonus} HACHI</span></div></div>
+                <button onClick={registerReferral} disabled={!connected} style={{...btnP,opacity:connected?1:0.4}}>Registrarme con este referido</button>
+              </div>
+            </>
+          :
             <div style={card}>
-              <input value={refInput} onChange={e=>setRefInput(e.target.value)} placeholder="Wallet del referidor (0x...)" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
-              <div style={pBox}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Recibes</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.newBonus} HACHI</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu referidor recibe</span><span style={{color:'#a78bfa',fontFamily:'monospace'}}>{refInfo.refBonus} HACHI</span></div></div>
-              <button onClick={registerReferral} disabled={!connected} style={{...btnP,opacity:connected?1:0.4}}>Registrar referido</button>
+              <div style={{fontSize:12,color:'#8b949e',lineHeight:1.6}}>Para registrarte con un referido, necesitás abrir la app a través del link de invitación de alguien.</div>
             </div>
-          </>}
+          }
         </div>}
 
       {debugMode&&logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,margin:'8px 0'}}>
