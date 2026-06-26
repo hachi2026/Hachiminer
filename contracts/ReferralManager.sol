@@ -111,12 +111,11 @@ contract ReferralManager is ReentrancyGuard {
     // --- REGISTRAR CON REFERIDO -------------------------------
     /// @notice El nuevo usuario se registra indicando la wallet de quien lo refirio
     /// @param referrer Direccion de la wallet del referidor
-    function registerWithReferral(address referrer) external nonReentrant onlyHuman {
+    function registerWithReferral(address referrer) external nonReentrant {
         address newUser = msg.sender;
 
         require(referrer != address(0),  "Invalid referrer");
         require(referrer != newUser,     "Cannot refer yourself");
-        require(humanVerified[referrer], "Referrer not verified");
         require(referrerOf[newUser] == address(0), "Already registered with referral");
 
         // Registrar la relacion
@@ -176,14 +175,10 @@ contract ReferralManager is ReentrancyGuard {
         bool eligible,
         string memory reason
     ) {
-        if (!humanVerified[user])
-            return (false, "World ID not verified");
         if (referrerOf[user] != address(0))
             return (false, "Already registered with referral");
         if (referrer == user)
             return (false, "Cannot refer yourself");
-        if (!humanVerified[referrer])
-            return (false, "Referrer not verified");
         return (true, "");
     }
 

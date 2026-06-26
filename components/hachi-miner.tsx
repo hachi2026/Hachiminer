@@ -228,6 +228,7 @@ export default function HachiMiner() {
   const [lastWinners, setLastWinners] = useState<{addr:string,amount:number,rank:number}[]>([])
   const [refInfo, setRefInfo] = useState({referrer:'',totalRefs:0,earned:'0 HACHI',refBonus:'500',newBonus:'500'})
   const [refInput, setRefInput] = useState('')
+  const [refFromLink, setRefFromLink] = useState('')
   const [poolsData, setPoolsData] = useState<any>({})
   const [logs, setLogs] = useState<string[]>([])
   const [campaigns, setCampaigns] = useState<any[]>([])
@@ -256,6 +257,8 @@ export default function HachiMiner() {
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined
     const init = async () => {
+      const refParam = new URLSearchParams(window.location.search).get('ref')
+      if (refParam && /^0x[0-9a-fA-F]{40}$/i.test(refParam)) setRefFromLink(refParam)
       try {
         MiniKit.install(APP_ID)
       } catch (e: any) {
@@ -295,6 +298,11 @@ export default function HachiMiner() {
     setSushiPrev(p => ({...p, base:fmt(Math.round(sushiBase))+' SUSHI', total:fmt(Math.round(total))+' SUSHI'}))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selSUSHI, hachiSushi])
+
+  useEffect(() => {
+    if (refFromLink && !refInput) setRefInput(refFromLink)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refFromLink])
 
   // Devuelve la dirección conectada o '' si falla
   const connectMiniKit = async (): Promise<string> => {
@@ -1104,6 +1112,7 @@ export default function HachiMiner() {
           <div style={card}><div style={cTitle}>Mi código de referido</div>
             <div style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontFamily:'monospace',fontSize:12,wordBreak:'break-all',marginBottom:8}}>{addr||'Conecta tu wallet'}</div>
             <button onClick={()=>{navigator.clipboard.writeText(addr);toast_('Código copiado','#3fb950')}} style={btnGh}>Copiar código</button>
+            <button onClick={async()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>
             <div style={pBox}>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Mis referidos</span><span style={{fontFamily:'monospace',fontWeight:600}}>{refInfo.totalRefs}</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI ganado</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.earned}</span></div>
