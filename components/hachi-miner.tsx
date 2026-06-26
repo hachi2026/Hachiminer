@@ -80,6 +80,8 @@ const LOCK = [
   'function getUserBatches(address) view returns (uint256[],uint256[],bool[])',
   'function canMine(address) view returns (bool)',
   'function deposit(uint256)', 'function claimAPY()', 'function unstake(uint256)',
+  'function totalLocked() view returns (uint256)',
+  'function totalUsers() view returns (uint256)',
 ]
 const RANKING = [
   'function getUserStats(address) view returns (uint256,uint256,uint256,uint256,uint8,uint256)',
@@ -222,6 +224,7 @@ export default function HachiMiner() {
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
   const [lockBatches, setLockBatches] = useState<any[]>([])
+  const [platformStats, setPlatformStats] = useState({totalLocked:'—',totalUsers:'—'})
   const [depositAmt, setDepositAmt] = useState('')
   const [rankStats, setRankStats] = useState({points:'0',totalHist:'0',pos:'—',reward:'0',earned:'0',nextDist:'—'})
   const [rankList, setRankList] = useState<any[]>([])
@@ -656,6 +659,11 @@ export default function HachiMiner() {
       const b = await lock.getUserBatches(addr)
       setLockBatches(b[0].map((a:bigint,i:number) => ({amount:fe(a), unlocks:new Date(Number(b[1][i])*1000), ready:b[2][i]})).filter((x:any) => x.amount>0))
     } catch(e) {}
+    try {
+      const lock = new ethers.Contract(C.lock,LOCK,p)
+      const [tl, tu] = await Promise.all([lock.totalLocked(), lock.totalUsers()])
+      setPlatformStats({totalLocked:fmt(fe(tl))+' HACHI', totalUsers:tu.toString()})
+    } catch(e) {}
   }
 
   const loadRanking = async (p: ethers.JsonRpcProvider) => {
@@ -1029,6 +1037,9 @@ export default function HachiMiner() {
           <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
           <div style={{fontSize:11,color:'#d29922',marginBottom:8,lineHeight:1.4}}>⚠ Depositar reinicia el cooldown de 24h para cobrar APY</div>
           <button onClick={doDeposit} style={btnP}>Depositar</button>
+          <div style={card}><div style={cTitle}>🌍 Total de la comunidad</div>
+            {[['HACHI bloqueado',platformStats.totalLocked],['Usuarios activos',platformStats.totalUsers]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+          </div>
           <div style={{...card,marginTop:12}}><div style={cTitle}>Niveles del Lock</div>
             <div style={{fontSize:11,color:'#8b949e',marginBottom:10,lineHeight:1.5}}>Con menos de 50,000 HACHI bloqueados (Sin tier) accedés a las licencias Bocado Básicas, pero no generás APY. Desde 50,000 HACHI (Tier 1 — Akira) empezás a ganar rendimiento.</div>
             {[{name:'Akira',min:'50,000',apy:'10%'},{name:'Zen',min:'200,000',apy:'20%'},{name:'Koban',min:'500,000',apy:'30%'},{name:'Tayko',min:'750,000',apy:'40%'},{name:'Hachi',min:'1,000,000',apy:'50%'}].map(({name,min,apy})=>{
@@ -1118,11 +1129,11 @@ export default function HachiMiner() {
         {tab==='refs'&&<div>
           <div style={card}><div style={cTitle}>Mi código de referido</div>
             <div style={{color:'#8b949e',fontSize:12,marginBottom:8}}>{addr?'✓ Tu código está listo para compartir':'Conecta tu wallet para ver tu código'}</div>
-            <button onClick={()=>{navigator.clipboard.writeText(addr);toast_('Código copiado','#3fb950')}} style={btnGh}>Copiar código</button>
             {(()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;return(<button onClick={async()=>{if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>)})()}
             <div style={pBox}>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Mis referidos</span><span style={{fontFamily:'monospace',fontWeight:600}}>{refInfo.totalRefs}</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI ganado</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.earned}</span></div>
+              <div style={{fontSize:11,color:'#8b949e',marginTop:8,lineHeight:1.5}}>✓ Ya está en tu wallet — se paga automáticamente cuando alguien se registra con tu link, sin necesidad de cobrar.</div>
             </div>
           </div>
           {refInfo.referrer?
