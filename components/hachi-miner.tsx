@@ -349,6 +349,7 @@ export default function HachiMiner() {
         log('addr: ' + walletAddr.slice(0,10))
         setAddr(walletAddr)
         setUsername(MiniKit.user?.username || '')
+        resolveUsernames([walletAddr])
         setConnected(true)
         setInWA(true)
         // NO marcamos verified aquí. El estado real de verificación World ID
