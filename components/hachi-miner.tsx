@@ -1085,7 +1085,10 @@ export default function HachiMiner() {
         </div>}
 
         {tab==='ranking'&&<div>
-          <div style={sLabel}>Ranking (cada 15 días)</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:6,marginBottom:8}}>
+            <span style={sLabel}>Ranking</span>
+            <span style={{fontSize:14,fontWeight:800,color:'#fbbf24',textShadow:'0 0 10px rgba(251,191,36,.5)'}}>⏱ {rankStats.nextDist}</span>
+          </div>
           {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.map((e,i)=>{
             const isMe=e.a.toLowerCase()===addr.toLowerCase(),medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`
             return <div key={e.a} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:8,marginBottom:4,background:'#1e0840',border:`1px solid ${isMe?'#34d399':'#5b21b6'}`}}>
@@ -1096,7 +1099,6 @@ export default function HachiMiner() {
           })}
           <div style={card}><div style={cTitle}>Mis estadísticas</div>
             {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
-            <div style={{fontSize:11,color:'#8b949e',marginTop:8}}>Próximo reparto: <span style={{color:'#fbbf24',fontWeight:600}}>{rankStats.nextDist}</span></div>
           </div>
           <button onClick={claimPrize} style={btnGo}>Cobrar premio</button>
           {lastWinners.length>0&&<div style={card}>
