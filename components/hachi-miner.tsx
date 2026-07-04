@@ -20,8 +20,6 @@ const C = {
   lock:     '0xF743772A09f92850deAFcBDfe6610cFfCe326003',
   ranking:  '0xfA503d183cc747cBA75D1a5ba419150f5529eB27',
   core:     '0xE1892183A27389c6a4CACc091F62F9412B7EA6b9',
-  adMgr:    '0xC51debcdc888d75EE91293B7E2ADE1C22C944097',
-  referral: '0xeD93898021C07797797c783Dd5cd096e1C8644d5',
   hachi:    '0xbE0313f279580FDD1aA1b1b6888407E6504fF19E',
   wld:      '0x2cfc85d8e48f8eab294be644d9e25c3030863003',
   sushi:    '0xab09a728e53d3d6bc438be95eed46da0bbe7fb38',
@@ -92,28 +90,13 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-const ADMGR = [
-  'function getActiveCampaigns() view returns (uint256[],string[],uint8[],uint256[],uint256[])',
-  'function canParticipate(address,uint256) view returns (bool,uint256,uint256)',
-  'function previewCampaign(uint8) view returns (uint256,uint256,uint256,uint256)',
-  'function participate(uint256)',
-  'function createCampaign(uint8,string,string,uint8)',
-]
-const REFERRAL = [
-  'function registerWithReferral(address)',
-  'function getReferralInfo(address) view returns (address,uint256,uint256,address[])',
-  'function canRegister(address,address) view returns (bool,string)',
-  'function currentRefBonus() view returns (uint256)',
-  'function currentNewBonus() view returns (uint256)',
-]
-
-type Tab = 'home'|'lics'|'lock'|'ranking'|'pools'|'ads'|'refs'
+type Tab = 'home'|'lics'|'lock'|'ranking'|'pools'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
-  es: { connect:'Conectar', verified:'World ID ✓', not_verified:'Sin verificar', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Inicio', nav_lics:'📜 Licencias', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Anuncios', nav_refs:'👥 Referidos', err_connect:'Conecta tu wallet', err_verify:'Verifica tu World ID', err_price:'Ventas pausadas', approving:'Aprobando...', no_lics:'Sin licencias activas', connect_prompt:'Conecta tu wallet para comenzar', access_title:'Acceso restringido', access_desc:'Para licencias SUSHI necesitas 5,000 HACHI lockeados o una licencia WLD activa', day1:'Día 1 — recibís de vuelta', day2:'Día 2 — tu ganancia (24h)' },
-  en: { connect:'Connect', verified:'World ID ✓', not_verified:'Not verified', daily_claim:'Claim 10 HACHI', nav_home:'🏠 Home', nav_lics:'📜 Licenses', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Ads', nav_refs:'👥 Referrals', err_connect:'Connect your wallet', err_verify:'Verify your World ID', err_price:'Sales paused', approving:'Approving...', no_lics:'No active licenses', connect_prompt:'Connect your wallet to start', access_title:'Restricted access', access_desc:'For SUSHI licenses you need 5,000 HACHI locked or an active WLD license', day1:'Day 1 — get back investment', day2:'Day 2 — your profit (24h)' },
-  pt: { connect:'Conectar', verified:'World ID ✓', not_verified:'Não verificado', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Início', nav_lics:'📜 Licenças', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', nav_ads:'📢 Anúncios', nav_refs:'👥 Indicações', err_connect:'Conecte sua carteira', err_verify:'Verifique seu World ID', err_price:'Vendas pausadas', approving:'Aprovando...', no_lics:'Sem licenças ativas', connect_prompt:'Conecte sua carteira para começar', access_title:'Acesso restrito', access_desc:'Para licenças SUSHI você precisa de 5.000 HACHI bloqueados ou uma licença WLD ativa', day1:'Dia 1 — recupere investimento', day2:'Dia 2 — seu lucro (24h)' },
+  es: { connect:'Conectar', verified:'World ID ✓', not_verified:'Sin verificar', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Inicio', nav_lics:'📜 Licencias', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', err_connect:'Conecta tu wallet', err_verify:'Verifica tu World ID', err_price:'Ventas pausadas', approving:'Aprobando...', no_lics:'Sin licencias activas', connect_prompt:'Conecta tu wallet para comenzar', access_title:'Acceso restringido', access_desc:'Para licencias SUSHI necesitas 5,000 HACHI lockeados o una licencia WLD activa', day1:'Día 1 — recibís de vuelta', day2:'Día 2 — tu ganancia (24h)' },
+  en: { connect:'Connect', verified:'World ID ✓', not_verified:'Not verified', daily_claim:'Claim 10 HACHI', nav_home:'🏠 Home', nav_lics:'📜 Licenses', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', err_connect:'Connect your wallet', err_verify:'Verify your World ID', err_price:'Sales paused', approving:'Approving...', no_lics:'No active licenses', connect_prompt:'Connect your wallet to start', access_title:'Restricted access', access_desc:'For SUSHI licenses you need 5,000 HACHI locked or an active WLD license', day1:'Day 1 — get back investment', day2:'Day 2 — your profit (24h)' },
+  pt: { connect:'Conectar', verified:'World ID ✓', not_verified:'Não verificado', daily_claim:'Cobrar 10 HACHI', nav_home:'🏠 Início', nav_lics:'📜 Licenças', nav_lock:'🔒 Lock', nav_rank:'🏆 Ranking', nav_pools:'🌊 Pools', err_connect:'Conecte sua carteira', err_verify:'Verifique seu World ID', err_price:'Vendas pausadas', approving:'Aprovando...', no_lics:'Sem licenças ativas', connect_prompt:'Conecte sua carteira para começar', access_title:'Acesso restrito', access_desc:'Para licenças SUSHI você precisa de 5.000 HACHI bloqueados ou uma licença WLD ativa', day1:'Dia 1 — recupere investimento', day2:'Dia 2 — seu lucro (24h)' },
 }
 
 const LOGIN = {
@@ -231,16 +214,8 @@ export default function HachiMiner() {
   const [rankStats, setRankStats] = useState({points:'0',totalHist:'0',pos:'—',reward:'0',earned:'0',nextDist:'—'})
   const [rankList, setRankList] = useState<any[]>([])
   const [lastWinners, setLastWinners] = useState<{addr:string,amount:number,rank:number}[]>([])
-  const [refInfo, setRefInfo] = useState({referrer:'',totalRefs:0,earned:'0 HACHI',refBonus:'500',newBonus:'500'})
-  const [refFromLink, setRefFromLink] = useState('')
   const [poolsData, setPoolsData] = useState<any>({})
   const [logs, setLogs] = useState<string[]>([])
-  const [campaigns, setCampaigns] = useState<any[]>([])
-  const [campType, setCampType] = useState(0)
-  const [campTitle, setCampTitle] = useState('')
-  const [campUrl, setCampUrl] = useState('')
-  const [campPlatform, setCampPlatform] = useState(0)
-  const [campHPV, setCampHPV] = useState('—')
   const [showVerify, setShowVerify] = useState(false)
 
   const viemClient = useMemo(() => createPublicClient({
@@ -261,8 +236,6 @@ export default function HachiMiner() {
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined
     const init = async () => {
-      const refParam = new URLSearchParams(window.location.search).get('ref')
-      if (refParam && /^0x[0-9a-fA-F]{40}$/i.test(refParam)) setRefFromLink(refParam)
       try {
         MiniKit.install(APP_ID)
       } catch (e: any) {
@@ -660,8 +633,6 @@ export default function HachiMiner() {
     if (v==='lock') loadLock(p)
     if (v==='ranking') loadRanking(p)
     if (v==='pools') loadPools(p)
-    if (v==='ads') loadAds(p)
-    if (v==='refs') loadRefs(p)
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -775,61 +746,6 @@ export default function HachiMiner() {
   } catch(e:any) { log('loadPools err: '+(e.message||'error').slice(0,50)) }
   }
 
-  const loadAds = async (p: ethers.JsonRpcProvider) => {
-    try {
-      const ad = new ethers.Contract(C.adMgr,ADMGR,p)
-      const c = await ad.getActiveCampaigns()
-      if (!c[0].length) { setCampaigns([]); return }
-      const items = await Promise.all(c[0].map(async(id:bigint,i:number) => {
-        let canPart=false,waitH=0,reward:bigint=BigInt(0)
-        try { const cp=await ad.canParticipate(addr,id); canPart=cp[0]; waitH=Math.ceil(Number(cp[1])/3600); reward=cp[2] } catch(e) {}
-        return {id, title:c[1][i], platform:Number(c[2][i]), views:Number(c[3][i]), reward:reward||c[4][i], canPart, waitH}
-      }))
-      setCampaigns(items)
-      try { const prev=await ad.previewCampaign(campType); setCampHPV(fmt(fe(prev[3]))+' HACHI') } catch(e) {}
-    } catch(e) {}
-  }
-
-  const participateAd = async (id: bigint) => { await execTx('Sumando a la alcancía',C.adMgr,ADMGR,'participate',[id]); loadAds(rpc()); if(addr) loadAll(addr) }
-
-  const loadRefs = async (p: ethers.JsonRpcProvider) => {
-    try {
-      const rf = new ethers.Contract(C.referral,REFERRAL,p)
-      const [info,refB,newB] = await Promise.all([rf.getReferralInfo(addr), rf.currentRefBonus(), rf.currentNewBonus()])
-      setRefInfo({
-        referrer: info[0]!=='0x0000000000000000000000000000000000000000'?info[0]:'',
-        totalRefs: Number(info[1]),
-        earned: fmt(fe(info[2]))+' HACHI',
-        refBonus: fmt(fe(refB)),
-        newBonus: fmt(fe(newB)),
-      })
-    } catch(e) {}
-  }
-  const registerReferral = async () => {
-    const ref = refFromLink.trim()
-    if (!ethers.isAddress(ref)) { toast_('Link de invitación inválido','#f85149'); return }
-    try {
-      const rf = new ethers.Contract(C.referral,REFERRAL,rpc())
-      const [ok,reason] = await rf.canRegister(addr,ref)
-      if (!ok) { toast_(reason||'No podés registrarte','#f85149'); return }
-      await execTx('Registrando referido',C.referral,REFERRAL,'registerWithReferral',[ref])
-      loadRefs(rpc())
-    } catch(e:any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80),'#f85149') }
-  }
-  const createCampaign = async () => {
-    if (!campTitle||!campUrl) { toast_('Completa todos los campos','#f85149'); return }
-    try {
-      toast_('Creando campaña...', '#d29922')
-  const amt = [pe(5),pe(10),pe(20),pe(50)][campType]
-  await sendTxMulti([
-  ...buildPermit2Approvals(C.wld, C.adMgr, amt),
-  { to: C.adMgr, abi: ADMGR, fnName: 'createCampaign', args: [campType,campTitle,campUrl,campPlatform] },
-  ])
-      toast_('✓ Campaña creada', '#3fb950')
-      setCampTitle(''); setCampUrl(''); loadAds(rpc())
-    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
-  }
-
   const wldNames = ['🌱 Básica','⚡ Estándar','💎 Premium','🚀 Elite']
   const wldPrices = ['1 WLD','3 WLD','5 WLD','10 WLD']
   const sushiNames = ['🌱 Bocado','⚡ Bocado Doble','💎 Bocado Grande','🚀 Bocado Real']
@@ -926,8 +842,8 @@ export default function HachiMiner() {
 
       {/* NAV */}
       <div style={{background:'#12022a',borderBottom:'1px solid #3b0764',display:'flex',overflowX:'auto',gap:2,padding:'0 12px'}}>
-        {(['home','lics','lock','ranking','pools','ads','refs'] as Tab[]).map((v,i)=>{
-          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_rank'),t('nav_pools'),t('nav_ads'),t('nav_refs')]
+        {(['home','lics','lock','ranking','pools'] as Tab[]).map((v,i)=>{
+          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_rank'),t('nav_pools')]
           return <button key={v} onClick={()=>loadTab(v)} style={{background:'none',border:'none',borderBottom:`2px solid ${tab===v?'#a78bfa':'transparent'}`,color:tab===v?'#a78bfa':'#8b949e',padding:'12px 14px',fontSize:13,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Georgia,serif',textShadow:tab===v?'0 0 8px #a78bfa':''}}>{labels[i]}</button>
         })}
       </div>
@@ -962,6 +878,9 @@ export default function HachiMiner() {
                 })()}
               </div>
             </div>
+            <div style={{background:'rgba(124,58,237,.1)',border:'1px solid #7c3aed',borderRadius:8,padding:10,marginBottom:8,fontSize:11,color:'#e6edf3',lineHeight:1.5}}>
+              🛡️ El reclamo diario también está disponible en la versión verificada con World ID — solo humanos verificados. <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>Ir a la nueva versión</a>.
+            </div>
             <button onClick={withdrawDaily} disabled={!piggy.canWithdraw||!connected} style={{...btnG,width:'100%',padding:'10px 12px',opacity:(!piggy.canWithdraw||!connected)?0.4:1}}>Retirar al wallet</button>
             {!accrualStarted&&connected&&<button onClick={startAccrualFn} style={{...btnP,width:'100%',padding:'10px 12px',marginTop:8}}>Activar acumulador</button>}
             <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras; pagás gas solo al retirar.</div>
@@ -991,7 +910,7 @@ export default function HachiMiner() {
               </div>)}
             </div>
             <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
-            <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI} style={{...btnP,opacity:(!connected||wldHachi>MAX_HACHI)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':`Comprar · ${wldPrices[selWLD]}`}</button>
+            <button onClick={buyWLD} disabled={true} style={{...btnP,opacity:0.4}}>Comprá tu licencia en la nueva versión verificada</button>
             <div style={sLabel}>Licencias WLD activas</div>
             {wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:wldLics.map(({id,l,pend})=><div key={id.toString()} style={card}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><strong>{['Básica','Estándar','Premium','Elite'][l[1]]}</strong><div style={{color:l[10]?'#3fb950':'#8b949e'}}>●</div></div>
@@ -1141,54 +1060,6 @@ export default function HachiMiner() {
             {[['Licencias WLD vendidas',poolsData.wldLics||'—'],['Licencias Bocado vendidas',poolsData.sushiLics||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
             <div style={row}><span style={{color:'#8b949e',fontSize:12}}>🔥 HACHI quemados</span><span style={{fontFamily:'monospace',color:'#f87171',fontWeight:600}}>{poolsData.burned||'—'}</span></div>
           </div>
-        </div>}
-
-        {tab==='ads'&&<div>
-          <div style={sLabel}>Campañas activas</div>
-          {campaigns.length===0?<div style={empty}><div style={{fontSize:28}}>📺</div><div>Sin campañas activas</div></div>:campaigns.map((c:any)=><div key={c.id.toString()} style={{...card,marginBottom:8}}>
-            <div style={{fontWeight:600,marginBottom:4}}>{c.title}</div>
-            <div style={{display:'flex',gap:12,fontSize:12,color:'#8b949e',marginBottom:8}}><span>{['▶ YouTube','✈ Telegram','𝕏 Twitter'][c.platform]}</span><span>{c.views} vistas</span><span style={{color:'#34d399'}}>{fmt(fe(c.reward))} HACHI/vista</span></div>
-            <button onClick={()=>participateAd(c.id)} disabled={!c.canPart||!connected} style={{...btnG,opacity:(!c.canPart||!connected)?0.4:1}}>{c.canPart?`Participar · +${fmt(fe(c.reward))} a la alcancía`:c.waitH>0?`En ${c.waitH}h`:'No disponible'}</button>
-          </div>)}
-          <div style={sLabel}>Publicar anuncio</div>
-          <div style={card}><div style={cTitle}>Nueva campaña</div>
-            <select value={campType} onChange={e=>setCampType(Number(e.target.value))} style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8}}><option value={0}>500 vistas — 5 WLD</option><option value={1}>1,000 vistas — 10 WLD</option><option value={2}>2,000 vistas — 20 WLD</option><option value={3}>5,000 vistas — 50 WLD</option></select>
-            <input value={campTitle} onChange={e=>setCampTitle(e.target.value)} placeholder="Título del anuncio" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
-            <input value={campUrl} onChange={e=>setCampUrl(e.target.value)} placeholder="URL del contenido" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
-            <select value={campPlatform} onChange={e=>setCampPlatform(Number(e.target.value))} style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:13,color:'#e6edf3',width:'100%',marginBottom:8}}><option value={0}>▶ YouTube</option><option value={1}>✈ Telegram</option><option value={2}>𝕏 Twitter/X</option></select>
-            <div style={{...pBox,marginBottom:12}}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Costo</span><span style={{fontFamily:'monospace'}}>{[5,10,20,50][campType]} WLD</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI por vista</span><span style={{fontFamily:'monospace',color:'#34d399'}}>{campHPV}</span></div></div>
-            <button onClick={createCampaign} disabled={!connected||!campTitle||!campUrl} style={{...btnP,opacity:(!connected||!campTitle||!campUrl)?0.4:1}}>Publicar campaña · {[5,10,20,50][campType]} WLD</button>
-          </div>
-        </div>}
-
-        {tab==='refs'&&<div>
-          <div style={card}><div style={cTitle}>Mi código de referido</div>
-            <div style={{color:'#8b949e',fontSize:12,marginBottom:8}}>{addr?'✓ Tu código está listo para compartir':'Conecta tu wallet para ver tu código'}</div>
-            {(()=>{const link=`https://world.org/mini-app?app_id=app_faaadf7d4dc1285275a436a8cac18e69&path=${encodeURIComponent('/?ref='+addr)}`;return(<button onClick={async()=>{if(navigator.share){try{await navigator.share({title:'HachiMiner',url:link})}catch{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}else{await navigator.clipboard.writeText(link);toast_('Link copiado','#3fb950')}}} style={{...btnGh,marginTop:8}}>Compartir mi link de invitación</button>)})()}
-            <div style={pBox}>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Mis referidos</span><span style={{fontFamily:'monospace',fontWeight:600}}>{refInfo.totalRefs}</span></div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI ganado</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.earned}</span></div>
-              <div style={{fontSize:11,color:'#8b949e',marginTop:8,lineHeight:1.5}}>✓ Ya está en tu wallet — se paga automáticamente cuando alguien se registra con tu link, sin necesidad de cobrar.</div>
-            </div>
-          </div>
-          {refInfo.referrer?
-            <div style={card}><div style={cTitle}>Ya tenés referidor</div>
-              <div style={{fontFamily:'monospace',fontSize:12,wordBreak:'break-all',color:'#a78bfa'}}>{refInfo.referrer}</div>
-            </div>
-          : refFromLink ?
-            <>
-              <div style={sLabel}>Registrar referido</div>
-              <div style={card}>
-                <div style={{fontSize:12,color:'#8b949e',marginBottom:8}}>Te invitó: <span style={{fontFamily:'monospace',color:'#a78bfa',fontWeight:600}}>{nameFor(refFromLink)}</span></div>
-                <div style={pBox}><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Recibís</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{refInfo.newBonus} HACHI</span></div><div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu referidor recibe</span><span style={{color:'#a78bfa',fontFamily:'monospace'}}>{refInfo.refBonus} HACHI</span></div></div>
-                <button onClick={registerReferral} disabled={!connected} style={{...btnP,opacity:connected?1:0.4}}>Registrarme con este referido</button>
-              </div>
-            </>
-          :
-            <div style={card}>
-              <div style={{fontSize:12,color:'#8b949e',lineHeight:1.6}}>Para registrarte con un referido, necesitás abrir la app a través del link de invitación de alguien.</div>
-            </div>
-          }
         </div>}
 
       {debugMode&&logs.length>0&&<div style={{background:'#0f0224',border:'1px solid #f87171',borderRadius:8,padding:10,margin:'8px 0'}}>
