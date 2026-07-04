@@ -882,8 +882,7 @@ export default function HachiMiner() {
               🛡️ El reclamo diario también está disponible en la versión verificada con World ID — solo humanos verificados. <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>Ir a la nueva versión</a>.
             </div>
             <button onClick={withdrawDaily} disabled={!piggy.canWithdraw||!connected} style={{...btnG,width:'100%',padding:'10px 12px',opacity:(!piggy.canWithdraw||!connected)?0.4:1}}>Retirar al wallet</button>
-            {!accrualStarted&&connected&&<button onClick={startAccrualFn} style={{...btnP,width:'100%',padding:'10px 12px',marginTop:8}}>Activar acumulador</button>}
-            <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>Hachi ahorra {piggy.accrual} HACHI por día de forma automática (sin gas) más lo que ganás en tareas. Retirá cuando quieras; pagás gas solo al retirar.</div>
+            <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>El acumulador de esta versión ya no genera HACHI nuevo. Si tenías saldo generado antes, todavía podés retirarlo acá arriba cuando quieras.</div>
           </div>
           <button onClick={()=>window.open(HACHI_BUY_URL,'_blank')} style={{...btnG,width:'100%',marginBottom:12}}>🪙 Comprar HACHI</button>
           {!connected&&<div style={{textAlign:'center',padding:'32px 16px',color:'#8b949e'}}>
