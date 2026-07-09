@@ -1011,7 +1011,10 @@ export default function HachiMiner() {
             <span style={sLabel}>Ranking</span>
             <span style={{fontSize:14,fontWeight:800,color:'#fbbf24',textShadow:'0 0 10px rgba(251,191,36,.5)'}}>⏱ {rankStats.nextDist}</span>
           </div>
-          {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.map((e,i)=>{
+          <div style={{background:'rgba(96,165,250,.1)',border:'1px solid rgba(96,165,250,.4)',borderRadius:8,padding:10,marginBottom:10,fontSize:11,color:'#8b949e',lineHeight:1.5}}>
+            Este ranking muestra el Top 30. Si estás en el Top 30 y todavía no pasaste a la nueva versión verificada, tu premio se te va a acreditar de forma manual.
+          </div>
+          {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.slice(0,30).map((e,i)=>{
             const isMe=e.a.toLowerCase()===addr.toLowerCase(),medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`
             return <div key={e.a} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:8,marginBottom:4,background:'#1e0840',border:`1px solid ${isMe?'#34d399':'#5b21b6'}`}}>
               <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,width:28}}>{medal}</div>
