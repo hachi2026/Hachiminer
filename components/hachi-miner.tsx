@@ -189,6 +189,7 @@ export default function HachiMiner() {
   const [oracleSt, setOracleSt] = useState('—')
   const [poolFree, setPoolFree] = useState('—')
   const [licsAvail, setLicsAvail] = useState('—')
+  const [licsAvailNum, setLicsAvailNum] = useState(0)
   const [priceAlert, setPriceAlert] = useState(false)
   const [piggy, setPiggy] = useState({accrued:0,accrual:100,canWithdraw:false})
   const [selWLD, setSelWLD] = useState(0)
@@ -394,7 +395,7 @@ export default function HachiMiner() {
       setWldHachi(wh); setHachiSushi(hs); setOracleSt(r[3]?'Manual':'DEX en vivo ✓'); setPriceAlert(wh>MAX_HACHI)
       const ws = await new ethers.Contract(C.poolWLD,POOLWLD,p).getPoolStatus()
       const hf=fe(ws[1]), costPerLic=wh*1.30, lb=costPerLic>0?Math.floor(hf/costPerLic):0
-      setPoolFree(fmt(hf)+' HACHI'); setLicsAvail(lb>0?lb+' lics. básicas':'0 (sin fondos)')
+      setPoolFree(fmt(hf)+' HACHI'); setLicsAvail(lb>0?lb+' lics. básicas':'0 (sin fondos)'); setLicsAvailNum(lb)
     } catch(e) {}
   }
 
@@ -852,7 +853,7 @@ export default function HachiMiner() {
 
         {tab==='home'&&<div>
           <div style={{background:'rgba(124,58,237,.1)',border:'1px solid #7c3aed',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#e6edf3',lineHeight:1.5}}>
-            🛡️ <strong>Nueva versión anti-bot disponible.</strong> Ya podés entrar a la versión verificada con World ID: <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>abrir versión nueva</a>. Esta app sigue funcionando con normalidad hasta el <strong>9 de julio</strong>, cuando se ejecuta el reparto final del ranking (con 5 días extra para reclamar tu premio). Tus licencias y tu HACHI lockeado se mantienen exactamente igual en la nueva versión — no perdés nada.
+            🛡️ <strong>Nueva versión anti-bot disponible.</strong> Podés seguir comprando licencias WLD y usando el Lock con normalidad acá mientras terminamos de pulir la versión verificada con World ID: <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>abrir versión nueva</a>. Una vez que esté lista del todo, vas a poder pasar tu progreso ahí para operar sin riesgo de que bots se lleven recursos del sistema. Tus licencias y tu HACHI lockeado se mantienen exactamente igual en la nueva versión — no perdés nada.
           </div>
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
           <div style={card}><div style={cTitle}>Estado del sistema</div>
@@ -909,7 +910,7 @@ export default function HachiMiner() {
               </div>)}
             </div>
             <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
-            <button onClick={buyWLD} disabled={true} style={{...btnP,opacity:0.4}}>Comprá tu licencia en la nueva versión verificada</button>
+            <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI||licsAvailNum<=0} style={{...btnP,opacity:(!connected||wldHachi>MAX_HACHI||licsAvailNum<=0)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':licsAvailNum<=0?'Sin stock disponible':`Comprar · ${wldPrices[selWLD]}`}</button>
             <div style={sLabel}>Licencias WLD activas</div>
             {wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:wldLics.map(({id,l,pend})=><div key={id.toString()} style={card}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><strong>{['Básica','Estándar','Premium','Elite'][l[1]]}</strong><div style={{color:l[10]?'#3fb950':'#8b949e'}}>●</div></div>
