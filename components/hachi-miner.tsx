@@ -27,6 +27,14 @@ const C = {
   permit2:  '0x000000000022D473030F116dDEE9F6B43aC78BA3',
 }
 
+const WEEKLY_BONUS_ADDR = '0x67ECFC02B852FDd9D55D0cBF8866cE6ff74126dF'
+const WEEKLY_BONUS_ABI = [
+  'function getDailyRate(address) view returns (uint256)',
+  'function previewClaim(address) view returns (uint256)',
+  'function claimBonus()',
+  'function lastActionTime(address) view returns (uint256)',
+]
+
 const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
 const HACHI_BUY_URL = 'https://world.org/mini-app?app_id=app_e5ba7c3061400e361f98ce44d8b1b9c4&path=/token/0xbe0313f279580fdd1aa1b1b6888407e6504ff19e'
 const WORLDCHAIN_ID = 480
@@ -206,6 +214,8 @@ export default function HachiMiner() {
   const [lastSpecialTs, setLastSpecialTs] = useState(0)
   const [basicBoughtToday, setBasicBoughtToday] = useState(0)
   const [hachiRaw, setHachiRaw] = useState(0)
+  const [weeklyBonus, setWeeklyBonus] = useState({dailyRate:0, pending:0, everClaimed:false})
+  const [claimingWeekly, setClaimingWeekly] = useState(false)
   const [wldRaw, setWldRaw]     = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
@@ -372,7 +382,7 @@ export default function HachiMiner() {
 
   const loadAll = async (address: string) => {
     const p = rpc()
-    await Promise.allSettled([loadBal(address,p), loadOracle(address,p), checkVerif(address,p), checkDaily(address,p), loadPools(p), loadLock(p)])
+    await Promise.allSettled([loadBal(address,p), loadOracle(address,p), checkVerif(address,p), checkDaily(address,p), loadPools(p), loadLock(p), loadWeeklyBonus(address,p)])
   }
 
   const loadBal = async (a: string, p: ethers.JsonRpcProvider) => {
@@ -666,6 +676,30 @@ export default function HachiMiner() {
     } catch(e) {}
   }
 
+  const loadWeeklyBonus = async (a: string, p: ethers.JsonRpcProvider) => {
+    try {
+      const wb = new ethers.Contract(WEEKLY_BONUS_ADDR, WEEKLY_BONUS_ABI, p)
+      const [dailyRate, pending, lastAction] = await Promise.all([
+        wb.getDailyRate(a), wb.previewClaim(a), wb.lastActionTime(a),
+      ])
+      setWeeklyBonus({dailyRate: fe(dailyRate), pending: fe(pending), everClaimed: Number(lastAction) > 0})
+    } catch(e) {}
+  }
+
+  const claimWeeklyBonus = async () => {
+    setClaimingWeekly(true)
+    try {
+      toast_('Reclamando bono semanal...', '#d29922')
+      await sendTx(WEEKLY_BONUS_ADDR, WEEKLY_BONUS_ABI, 'claimBonus', [])
+      toast_('✓ Bono semanal reclamado', '#3fb950')
+      loadWeeklyBonus(addr, rpc())
+    } catch(e: any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally {
+      setClaimingWeekly(false)
+    }
+  }
+
   const loadRanking = async (p: ethers.JsonRpcProvider) => {
     const r = new ethers.Contract(C.ranking, RANKING, p)
     let myPts = 0, totalHist = '0', reward = '—', earned = '—', pos = '—', nextDist = '—', lastExecTs = 0
@@ -856,6 +890,11 @@ export default function HachiMiner() {
             🛡️ <strong>Nueva versión anti-bot disponible.</strong> Podés seguir comprando licencias WLD y usando el Lock con normalidad acá mientras terminamos de pulir la versión verificada con World ID: <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>abrir versión nueva</a>. Una vez que esté lista del todo, vas a poder pasar tu progreso ahí para operar sin riesgo de que bots se lleven recursos del sistema. Tus licencias y tu HACHI lockeado se mantienen exactamente igual en la nueva versión — no perdés nada.
           </div>
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
+          <div style={card}><div style={cTitle}>💰 Bono Semanal</div>
+            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu tasa diaria</span><span style={{fontFamily:'monospace',fontWeight:600,color:'#60a5fa'}}>{weeklyBonus.dailyRate.toFixed(2)} SUSHI/día</span></div>
+            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Disponible para reclamar</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#3fb950'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</span></div>
+            <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0)} style={{...btnP,width:'100%',marginTop:8,opacity:(!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0))?0.4:1}}>{claimingWeekly?'Reclamando...':!weeklyBonus.everClaimed?'Activar y reclamar mi bono':weeklyBonus.pending>0?`Reclamar ${weeklyBonus.pending.toFixed(2)} SUSHI`:'Todavía no disponible'}</button>
+          </div>
           <div style={card}><div style={cTitle}>Estado del sistema</div>
             {[['Oracle',oracleSt],['1 WLD =',fmt(wldHachi)+' HACHI'],['1 HACHI =',hachiSushi.toFixed(4)+' SUSHI'],['Pool WLD disponible',poolFree],['Licencias WLD disponibles',licsAvail],['Máximo HACHI/WLD',MAX_HACHI.toLocaleString()]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
           </div>
