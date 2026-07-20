@@ -98,7 +98,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'ranking'|'pools'
+type Tab = 'home'|'lics'|'lock'|'pools'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -642,7 +642,6 @@ export default function HachiMiner() {
     const p = rpc()
     if (v==='lics') loadWLDLics(p)
     if (v==='lock') loadLock(p)
-    if (v==='ranking') loadRanking(p)
     if (v==='pools') loadPools(p)
   }
 
@@ -877,8 +876,8 @@ export default function HachiMiner() {
 
       {/* NAV */}
       <div style={{background:'#12022a',borderBottom:'1px solid #3b0764',display:'flex',overflowX:'auto',gap:2,padding:'0 12px'}}>
-        {(['home','lics','lock','ranking','pools'] as Tab[]).map((v,i)=>{
-          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_rank'),t('nav_pools')]
+        {(['home','lics','lock','pools'] as Tab[]).map((v,i)=>{
+          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_pools')]
           return <button key={v} onClick={()=>loadTab(v)} style={{background:'none',border:'none',borderBottom:`2px solid ${tab===v?'#a78bfa':'transparent'}`,color:tab===v?'#a78bfa':'#8b949e',padding:'12px 14px',fontSize:13,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Georgia,serif',textShadow:tab===v?'0 0 8px #a78bfa':''}}>{labels[i]}</button>
         })}
       </div>
@@ -886,18 +885,7 @@ export default function HachiMiner() {
       <div style={{maxWidth:480,margin:'0 auto',padding:16}}>
 
         {tab==='home'&&<div>
-          <div style={{background:'rgba(124,58,237,.1)',border:'1px solid #7c3aed',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#e6edf3',lineHeight:1.5}}>
-            🛡️ <strong>Nueva versión anti-bot disponible.</strong> Podés seguir comprando licencias WLD y usando el Lock con normalidad acá mientras terminamos de pulir la versión verificada con World ID: <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>abrir versión nueva</a>. Una vez que esté lista del todo, vas a poder pasar tu progreso ahí para operar sin riesgo de que bots se lleven recursos del sistema. Tus licencias y tu HACHI lockeado se mantienen exactamente igual en la nueva versión — no perdés nada.
-          </div>
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
-          <div style={card}><div style={cTitle}>💰 Bono Semanal</div>
-            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu tasa diaria</span><span style={{fontFamily:'monospace',fontWeight:600,color:'#60a5fa'}}>{weeklyBonus.dailyRate.toFixed(2)} SUSHI/día</span></div>
-            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Disponible para reclamar</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#3fb950'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</span></div>
-            <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0)} style={{...btnP,width:'100%',marginTop:8,opacity:(!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0))?0.4:1}}>{claimingWeekly?'Reclamando...':!weeklyBonus.everClaimed?'Activar y reclamar mi bono':weeklyBonus.pending>0?`Reclamar ${weeklyBonus.pending.toFixed(2)} SUSHI`:'Todavía no disponible'}</button>
-          </div>
-          <div style={card}><div style={cTitle}>Estado del sistema</div>
-            {[['Oracle',oracleSt],['1 WLD =',fmt(wldHachi)+' HACHI'],['1 HACHI =',hachiSushi.toFixed(4)+' SUSHI'],['Pool WLD disponible',poolFree],['Licencias WLD disponibles',licsAvail],['Máximo HACHI/WLD',MAX_HACHI.toLocaleString()]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
-          </div>
           <div style={card}><div style={cTitle}>HACHI</div>
             <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
               <img src="/hachi-cat-savings.png" alt="Hachi el gato ahorrando monedas HACHI" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />
@@ -918,11 +906,14 @@ export default function HachiMiner() {
                 })()}
               </div>
             </div>
-            <div style={{background:'rgba(124,58,237,.1)',border:'1px solid #7c3aed',borderRadius:8,padding:10,marginBottom:8,fontSize:11,color:'#e6edf3',lineHeight:1.5}}>
-              🛡️ El reclamo diario también está disponible en la versión verificada con World ID — solo humanos verificados. <a href="https://worldcoin.org/mini-app?app_id=app_ba8d66235ecf4bc9e341fff3768d9058&app_mode=mini-app" target="_blank" rel="noopener noreferrer" style={{color:'#a78bfa',textDecoration:'underline'}}>Ir a la nueva versión</a>.
-            </div>
             <button onClick={withdrawDaily} disabled={!piggy.canWithdraw||!connected} style={{...btnG,width:'100%',padding:'10px 12px',opacity:(!piggy.canWithdraw||!connected)?0.4:1}}>Retirar al wallet</button>
-            <div style={{fontSize:10,color:'#8b949e',marginTop:8,lineHeight:1.5}}>El acumulador de esta versión ya no genera HACHI nuevo. Si tenías saldo generado antes, todavía podés retirarlo acá arriba cuando quieras.</div>
+            <div style={{fontSize:10,color:'#8b949e',marginTop:8,marginBottom:12,lineHeight:1.5}}>El acumulador de esta versión ya no genera HACHI nuevo. Si tenías saldo generado antes, todavía podés retirarlo acá arriba cuando quieras.</div>
+            <div style={{borderTop:'1px solid #3b0764',paddingTop:12}}>
+              <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>💰 Bono Semanal x licencias activas</div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu tasa diaria</span><span style={{fontFamily:'monospace',fontWeight:600,color:'#60a5fa'}}>{weeklyBonus.dailyRate.toFixed(2)} SUSHI/día</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Disponible para reclamar</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#3fb950'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</span></div>
+              <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0)} style={{...btnP,width:'100%',marginTop:8,opacity:(!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0))?0.4:1}}>{claimingWeekly?'Reclamando...':!weeklyBonus.everClaimed?'Activar y reclamar mi bono':weeklyBonus.pending>0?`Reclamar ${weeklyBonus.pending.toFixed(2)} SUSHI`:'Todavía no disponible'}</button>
+            </div>
           </div>
           <button onClick={()=>window.open(HACHI_BUY_URL,'_blank')} style={{...btnG,width:'100%',marginBottom:12}}>🪙 Comprar HACHI</button>
           {!connected&&<div style={{textAlign:'center',padding:'32px 16px',color:'#8b949e'}}>
@@ -1032,51 +1023,10 @@ export default function HachiMiner() {
           {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
         </div>}
 
-        {tab==='ranking'&&<div>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:6,marginBottom:8}}>
-            <span style={sLabel}>Ranking</span>
-            <span style={{fontSize:14,fontWeight:800,color:'#fbbf24',textShadow:'0 0 10px rgba(251,191,36,.5)'}}>⏱ {rankStats.nextDist}</span>
-          </div>
-          <div style={{background:'rgba(96,165,250,.1)',border:'1px solid rgba(96,165,250,.4)',borderRadius:8,padding:10,marginBottom:10,fontSize:11,color:'#8b949e',lineHeight:1.5}}>
-            Este ranking muestra el Top 30. Si estás en el Top 30 y todavía no pasaste a la nueva versión verificada, tu premio se te va a acreditar de forma manual.
-          </div>
-          {rankList.length===0?<div style={empty}><div style={{fontSize:28}}>🏆</div><div>Sin participantes aún</div></div>:rankList.slice(0,30).map((e,i)=>{
-            const isMe=e.a.toLowerCase()===addr.toLowerCase(),medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`
-            return <div key={e.a} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:8,marginBottom:4,background:'#1e0840',border:`1px solid ${isMe?'#34d399':'#5b21b6'}`}}>
-              <div style={{fontFamily:'monospace',fontSize:13,fontWeight:700,width:28}}>{medal}</div>
-              <div style={{fontFamily:'monospace',fontSize:12,flex:1}}>{nameFor(e.a)}{isMe&&<span style={{color:'#34d399'}}> (tú)</span>}</div>
-              <div style={{fontFamily:'monospace',fontSize:12,fontWeight:700,color:'#fbbf24'}}>{fmt(e.pts)}</div>
-            </div>
-          })}
-          <div style={card}><div style={cTitle}>Mis estadísticas</div>
-            {[['Mis puntos',rankStats.points],['Mi posición',rankStats.pos],['Premio pendiente',rankStats.reward],['Total ganado',rankStats.earned]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
-          </div>
-          <button onClick={claimPrize} style={btnGo}>Cobrar premio</button>
-          {lastWinners.length>0&&<div style={card}>
-            <div style={cTitle}>🏆 Último reparto</div>
-            {lastWinners.map(({addr,amount,rank})=>(
-              <div key={rank} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:'1px solid #3b0764'}}>
-                <span style={{fontFamily:'monospace',fontWeight:700,width:28,color:'#fbbf24'}}>{rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`#${rank}`}</span>
-                <span style={{fontFamily:'monospace',fontSize:12,flex:1,color:'#c9d1d9'}}>{nameFor(addr)}</span>
-                <span style={{fontFamily:'monospace',fontSize:12,fontWeight:600,color:'#34d399'}}>{fmt(amount)} HACHI</span>
-              </div>
-            ))}
-          </div>}
-          <div style={card}>
-            <div style={cTitle}>¿Cómo se suman puntos?</div>
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:700,color:'#34d399',marginBottom:4,letterSpacing:.5}}>✓ SUMAN PUNTOS</div>
-              {[['💰','Cobrar HACHI de licencia WLD'],['bocado','Comprar Bocado'],['🐱','Retirar de la alcancía'],['📢','Participar en anuncios'],['📈','Cobrar APY del Lock'],['👥','Registrar un referido (vos y tu referido)']].map(([icon,text])=><div key={text} style={{display:'flex',alignItems:'flex-start',gap:6,padding:'4px 0',borderBottom:'1px solid #3b0764'}}><span style={{flexShrink:0,fontSize:13,display:'flex',alignItems:'center'}}>{icon==='bocado'?<img src="/hachi-cat-savings.png" width={16} height={16} style={{borderRadius:3,objectFit:'cover'}} />:icon}</span><span style={{fontSize:12,color:'#c9d1d9',lineHeight:1.4}}>{text}</span></div>)}
-            </div>
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:700,color:'#f87171',marginBottom:4,letterSpacing:.5}}>✗ NO SUMAN PUNTOS</div>
-              {['Comprar licencia WLD (los puntos llegan al cobrar el HACHI generado)','Depositar en el Lock (los puntos llegan al cobrar el APY)','Retirar del Lock (unstake)'].map(text=><div key={text} style={{display:'flex',alignItems:'flex-start',gap:6,padding:'4px 0',borderBottom:'1px solid #3b0764'}}><span style={{flexShrink:0,fontSize:12,color:'#8b949e'}}>—</span><span style={{fontSize:12,color:'#8b949e',lineHeight:1.4}}>{text}</span></div>)}
-            </div>
-            <div style={{fontSize:11,color:'#9b96c4',lineHeight:1.5,paddingTop:4}}>Tu multiplicador de tier actual aumenta todos los puntos que ganés. Mientras más HACHI tengas bloqueado en el Lock, más puntos sumás por cada acción.</div>
-          </div>
-        </div>}
-
         {tab==='pools'&&<div>
+          <div style={card}><div style={cTitle}>Estado del sistema</div>
+            {[['Oracle',oracleSt],['1 WLD =',fmt(wldHachi)+' HACHI'],['1 HACHI =',hachiSushi.toFixed(4)+' SUSHI'],['Pool WLD disponible',poolFree],['Licencias WLD disponibles',licsAvail],['Máximo HACHI/WLD',MAX_HACHI.toLocaleString()]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
+          </div>
           <div style={sLabel}>Estado de pools</div>
           <div style={card}><div style={cTitle}>💠 Pool WLD</div>
             {[['Total',poolsData.wldTotal||'—'],['Reservado',poolsData.wldComm||'—'],['Libre',poolsData.wldFree||'—'],['Total pagado',poolsData.wldPaid||'—'],['Licencias disponibles',poolsData.licsAvail||'—']].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>)}
