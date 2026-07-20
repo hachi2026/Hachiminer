@@ -216,6 +216,7 @@ export default function HachiMiner() {
   const [hachiRaw, setHachiRaw] = useState(0)
   const [weeklyBonus, setWeeklyBonus] = useState({dailyRate:0, pending:0, everClaimed:false})
   const [claimingWeekly, setClaimingWeekly] = useState(false)
+  const [showInfoWeekly, setShowInfoWeekly] = useState(false)
   const [wldRaw, setWldRaw]     = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
@@ -890,30 +891,21 @@ export default function HachiMiner() {
             <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
               <img src="/hachi-cat-savings.png" alt="Hachi el gato ahorrando monedas HACHI" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />
               <div style={{flex:1}}>
-                <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:8}}>
-                  <div style={{fontSize:26,fontWeight:700,fontFamily:'monospace',color:'#fbbf24'}}>{fmt(piggy.accrued)}</div>
-                  <div style={{fontSize:13,color:'#8b949e'}}>HACHI ahorrados</div>
-                </div>
-                {(()=>{
-                  const now = Math.floor(Date.now()/1000)
-                  const cooldownEnds = lastSettle + 86400
-                  const inCooldown = lastSettle > 0 && now < cooldownEnds
-                  if (inCooldown) {
-                    const s = cooldownEnds - now, h = Math.floor(s/3600), m = Math.floor((s%3600)/60)
-                    return <div style={{fontSize:11,color:'#d29922',marginTop:4}}>{`Próximo retiro disponible en ${h}h ${m}m`}</div>
-                  }
-                  return <div style={{fontSize:11,color:piggy.canWithdraw?'#3fb950':'#8b949e',marginTop:4}}>{piggy.canWithdraw?'✓ Retirá cuando quieras':'Aún no hay HACHI acumulado'}</div>
-                })()}
+                <div style={{fontSize:16,fontWeight:700,color:'#e6edf3'}}>💰 Bono Semanal</div>
+                <div style={{fontSize:11,color:'#8b949e',marginTop:2}}>Según tus licencias WLD activas</div>
               </div>
             </div>
-            <button onClick={withdrawDaily} disabled={!piggy.canWithdraw||!connected} style={{...btnG,width:'100%',padding:'10px 12px',opacity:(!piggy.canWithdraw||!connected)?0.4:1}}>Retirar al wallet</button>
-            <div style={{fontSize:10,color:'#8b949e',marginTop:8,marginBottom:12,lineHeight:1.5}}>El acumulador de esta versión ya no genera HACHI nuevo. Si tenías saldo generado antes, todavía podés retirarlo acá arriba cuando quieras.</div>
-            <div style={{borderTop:'1px solid #3b0764',paddingTop:12}}>
-              <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>💰 Bono Semanal x licencias activas</div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu tasa diaria</span><span style={{fontFamily:'monospace',fontWeight:600,color:'#60a5fa'}}>{weeklyBonus.dailyRate.toFixed(2)} SUSHI/día</span></div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Disponible para reclamar</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#3fb950'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</span></div>
-              <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0)} style={{...btnP,width:'100%',marginTop:8,opacity:(!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0))?0.4:1}}>{claimingWeekly?'Reclamando...':!weeklyBonus.everClaimed?'Activar y reclamar mi bono':weeklyBonus.pending>0?`Reclamar ${weeklyBonus.pending.toFixed(2)} SUSHI`:'Todavía no disponible'}</button>
-            </div>
+            <button onClick={()=>setShowInfoWeekly(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'6px 12px',cursor:'pointer',marginBottom:10,width:'100%'}}>ℹ️ ¿Cómo funciona este bono?</button>
+            {showInfoWeekly&&<div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
+              Ganás <strong>100 SUSHI por día, por cada WLD que tengas invertido</strong> en tus licencias WLD activas. Por ejemplo, si tenés 10 WLD invertidos entre todas tus licencias, son 1,000 SUSHI/día de tasa.
+              <br/><br/>
+              Se acumula hasta un tope de <strong>7 días</strong>. El primer reclamo ya paga de inmediato. Después, hay que esperar 7 días entre reclamos.
+              <br/><br/>
+              Ojo: una vez que corresponda reclamar, tenés <strong>3 días de gracia</strong> — si no reclamás en ese plazo, ese saldo se pierde y vuelve al pool.
+            </div>}
+            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu tasa diaria</span><span style={{fontFamily:'monospace',fontWeight:600,color:'#60a5fa'}}>{weeklyBonus.dailyRate.toFixed(2)} SUSHI/día</span></div>
+            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Disponible para reclamar</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#3fb950'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</span></div>
+            <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0)} style={{...btnP,width:'100%',marginTop:8,opacity:(!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0))?0.4:1}}>{claimingWeekly?'Reclamando...':!weeklyBonus.everClaimed?'Activar y reclamar mi bono':weeklyBonus.pending>0?`Reclamar ${weeklyBonus.pending.toFixed(2)} SUSHI`:'Todavía no disponible'}</button>
           </div>
           <button onClick={()=>window.open(HACHI_BUY_URL,'_blank')} style={{...btnG,width:'100%',marginBottom:12}}>🪙 Comprar HACHI</button>
           {!connected&&<div style={{textAlign:'center',padding:'32px 16px',color:'#8b949e'}}>
