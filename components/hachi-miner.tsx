@@ -950,12 +950,12 @@ export default function HachiMiner() {
             </div>)}
           </div>}
           {licTab==='sushi'&&<div>
-            {!sushiAccess&&<div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.35)',borderRadius:8,padding:20,textAlign:'center',marginBottom:12}}>
+            {wldTierActive===255&&<div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.35)',borderRadius:8,padding:20,textAlign:'center',marginBottom:12}}>
               <div style={{fontSize:28,marginBottom:8}}>🔒</div>
-              <div style={{fontWeight:700,color:'#f87171',marginBottom:6}}>{t('access_title')}</div>
-              <div style={{fontSize:13,color:'#8b949e'}}>{t('access_desc')}</div>
+              <div style={{fontWeight:700,color:'#f87171',marginBottom:6}}>Necesitás una licencia WLD activa</div>
+              <div style={{fontSize:13,color:'#8b949e'}}>El Bocado ya no está disponible para quienes no tienen una licencia WLD.</div>
             </div>}
-            {sushiAccess&&<>
+            {wldTierActive!==255&&<>
               <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-cat-savings.png" alt="" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />Convertí tus HACHI en Bocado</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
                 <div onClick={()=>setSelSUSHI(0)} style={{...lCard,border:`1px solid ${selSUSHI===0?'#fbbf24':'#5b21b6'}`,background:selSUSHI===0?'rgba(251,191,36,.08)':'#1e0840',cursor:'pointer'}}>
@@ -967,7 +967,7 @@ export default function HachiMiner() {
               </div>
               <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
               {(()=>{
-                const maxBasicNow = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
+                const maxBasicNow = wldTierActive===255?0:1
                 const dailyLimitHit = selSUSHI===0 && basicBoughtToday >= maxBasicNow
                 const label = dailyLimitHit ? '🚫 Límite diario alcanzado, volvé mañana' : `Comprar · ${sushiPrices[selSUSHI]}`
                 return <button onClick={buySUSHI} disabled={dailyLimitHit} style={{...btnG, opacity: dailyLimitHit?0.5:1, cursor: dailyLimitHit?'not-allowed':'pointer'}}>{label}</button>
