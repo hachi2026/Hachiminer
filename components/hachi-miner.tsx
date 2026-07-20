@@ -35,6 +35,31 @@ const WEEKLY_BONUS_ABI = [
   'function lastActionTime(address) view returns (uint256)',
 ]
 
+function isVotingOpen(): boolean {
+  const now = new Date()
+  const gmt4 = new Date(now.getTime() - 4 * 3600 * 1000)
+  const day = gmt4.getUTCDay() // 0=Dom,1=Lun,...,4=Jue,5=Vie,6=Sab
+  const hour = gmt4.getUTCHours()
+  if (day === 4 && hour >= 20) return true // jueves desde las 20:00
+  if (day === 5 || day === 6) return true // viernes y sábado, todo el día
+  if (day === 0 && hour < 20) return true // domingo hasta las 19:59
+  return false
+}
+
+function secondsUntilNextVoting(): number {
+  const now = new Date()
+  const gmt4Now = new Date(now.getTime() - 4 * 3600 * 1000)
+  const day = gmt4Now.getUTCDay()
+  let daysUntilThursday = (4 - day + 7) % 7
+  const target = new Date(Date.UTC(
+    gmt4Now.getUTCFullYear(), gmt4Now.getUTCMonth(), gmt4Now.getUTCDate() + daysUntilThursday,
+    20, 0, 0
+  ))
+  let diff = (target.getTime() - gmt4Now.getTime()) / 1000
+  if (diff <= 0) diff += 7 * 86400
+  return Math.floor(diff)
+}
+
 const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
 const HACHI_BUY_URL = 'https://world.org/mini-app?app_id=app_e5ba7c3061400e361f98ce44d8b1b9c4&path=/token/0xbe0313f279580fdd1aa1b1b6888407e6504ff19e'
 const WORLDCHAIN_ID = 480
@@ -887,6 +912,29 @@ export default function HachiMiner() {
 
         {tab==='home'&&<div>
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
+          <div style={card}>
+            <div style={cTitle}>🗳️ Votación — Partido Hachi en World Republic</div>
+            {(()=>{
+              const open = isVotingOpen()
+              const secs = open ? 0 : secondsUntilNextVoting()
+              const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600)
+              return <div style={{textAlign:'center',marginBottom:12}}>
+                <div style={{fontSize:14,fontWeight:800,color:open?'#3fb950':'#e6edf3',marginBottom:4}}>{open?'✓ Votación abierta ahora mismo':'⏳ Próxima votación'}</div>
+                {!open&&<div style={{fontSize:12,color:'#8b949e'}}>Faltan <strong style={{color:'#fbbf24'}}>{d}d {h}h</strong></div>}
+              </div>
+            })()}
+            <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
+              🎁 <strong>Recibís 10,000 SUSHI</strong> por tu voto, y además participás de un <strong>sorteo aleatorio</strong>. Solo tenés que compartir la captura de tu voto en la comunidad (WhatsApp o Telegram, abajo).
+            </div>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:12,lineHeight:1.6}}>
+              La votación se abre todas las semanas, de <strong>jueves 20:00</strong> a <strong>domingo 19:59</strong> (hora de Chile / GMT-4).
+            </div>
+            <a href="https://www.worldrepublic.org/es/govern/parties/1f9bc8d0-9ae5-46fe-b6e1-0282cb782c41?ref=GEFSRZRZ" target="_blank" rel="noopener noreferrer" style={{display:'block',textAlign:'center',background:'linear-gradient(135deg,#7c3aed,#a78bfa)',color:'#fff',fontSize:13,fontWeight:700,padding:'11px 20px',borderRadius:10,textDecoration:'none',boxShadow:'0 0 16px rgba(124,58,237,.4)',marginBottom:10}}>Ir al Partido Hachi →</a>
+            <div style={{display:'flex',gap:8}}>
+              <a href="https://whatsapp.com/channel/0029Vb7aycxDjiOasgPK2k1h" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 8px',borderRadius:10,background:'linear-gradient(135deg,#25D366,#128C7E)',color:'#fff',fontSize:12,fontWeight:700,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/whatsapp.svg" alt="" width={16} height={16} style={{filter:'brightness(0) invert(1)'}} />Canal Oficial</a>
+              <a href="https://t.me/+mg3Tt_4pZJs4NTAx" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px 8px',borderRadius:8,border:'1px solid #229ED9',color:'#229ED9',fontSize:12,fontWeight:600,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/telegram.svg" alt="" width={16} height={16} style={{filter:'invert(52%) sepia(89%) saturate(1996%) hue-rotate(166deg) brightness(97%) contrast(96%)'}} />Telegram</a>
+            </div>
+          </div>
           <div style={card}><div style={cTitle}>HACHI</div>
             <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
               <img src="/hachi-cat-savings.png" alt="Hachi el gato ahorrando monedas HACHI" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />
