@@ -965,6 +965,12 @@ export default function HachiMiner() {
 
   return (
     <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#2a1f63 0%,#1d1a52 55%,#2b2c78 100%)',color:'#e6edf3',fontFamily:'Georgia,serif'}}>
+      <style>{`
+        @keyframes quickAccessPulse {
+          0%,100% { box-shadow: 0 0 6px rgba(167,139,250,.3); }
+          50% { box-shadow: 0 0 14px rgba(167,139,250,.6); }
+        }
+      `}</style>
       {toast&&<div style={{position:'fixed',top:16,right:16,zIndex:999,padding:'10px 16px',borderRadius:8,background:'#161b22',border:`1px solid ${toast.color}`,color:toast.color,fontSize:13,maxWidth:320}}>{toast.msg}</div>}
 
       {/* POPUP VERIFICACION WORLD ID */}
@@ -1008,6 +1014,18 @@ export default function HachiMiner() {
 
         {tab==='home'&&<div>
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:14}}>
+            {[
+              {icon:'📜',label:'Licencias',tab:'lics' as Tab,delay:0},
+              {icon:'🔒',label:'Lock',tab:'lock' as Tab,delay:0.3},
+              {icon:'🌊',label:'Pools',tab:'pools' as Tab,delay:0.6},
+              {icon:'⛏️',label:'WLD Miner',tab:'wldminer' as Tab,delay:0.9,isNew:true},
+            ].map(btn=><button key={btn.tab} onClick={()=>loadTab(btn.tab)} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'12px 4px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer',animation:`quickAccessPulse 3s ease-in-out infinite`,animationDelay:`${btn.delay}s`}}>
+              {(btn as any).isNew&&<span style={{position:'absolute',top:-6,right:-6,background:'#f59e0b',color:'#1e0840',fontSize:8,fontWeight:800,padding:'2px 5px',borderRadius:8,boxShadow:'0 0 8px rgba(245,158,11,.6)'}}>NUEVO</span>}
+              <span style={{fontSize:22}}>{btn.icon}</span>
+              <span style={{fontSize:10,fontWeight:600}}>{btn.label}</span>
+            </button>)}
+          </div>
           <div style={card}>
             <div style={cTitle}>🗳️ Votación — Partido Hachi en World Republic</div>
             {(()=>{
