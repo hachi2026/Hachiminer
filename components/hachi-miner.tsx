@@ -76,6 +76,7 @@ const WLD_MINER_ABI = [
   'function drachmaCommitted() view returns (uint256)',
 ]
 
+const SHOW_TOP_NAV = false // poner en true para volver a mostrar la barra de pestañas de arriba
 const RPC = 'https://worldchain-mainnet.g.alchemy.com/public'
 const HACHI_BUY_URL = 'https://world.org/mini-app?app_id=app_e5ba7c3061400e361f98ce44d8b1b9c4&path=/token/0xbe0313f279580fdd1aa1b1b6888407e6504ff19e'
 const WORLDCHAIN_ID = 480
@@ -139,7 +140,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -1003,12 +1004,15 @@ export default function HachiMiner() {
       </div>
 
       {/* NAV */}
-      <div style={{background:'#12022a',borderBottom:'1px solid #3b0764',display:'flex',overflowX:'auto',gap:2,padding:'0 12px'}}>
-        {(['home','lics','lock','pools','wldminer'] as Tab[]).map((v,i)=>{
-          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_pools'),'⛏️ WLD Miner']
+      {SHOW_TOP_NAV&&<div style={{background:'#12022a',borderBottom:'1px solid #3b0764',display:'flex',overflowX:'auto',gap:2,padding:'0 12px'}}>
+        {(['home','lics','lock','pools','wldminer','voting'] as Tab[]).map((v,i)=>{
+          const labels=[t('nav_home'),t('nav_lics'),t('nav_lock'),t('nav_pools'),'⛏️ WLD Miner','🗳️ Votación']
           return <button key={v} onClick={()=>loadTab(v)} style={{background:'none',border:'none',borderBottom:`2px solid ${tab===v?'#a78bfa':'transparent'}`,color:tab===v?'#a78bfa':'#8b949e',padding:'12px 14px',fontSize:13,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Georgia,serif',textShadow:tab===v?'0 0 8px #a78bfa':''}}>{labels[i]}</button>
         })}
-      </div>
+      </div>}
+      {!SHOW_TOP_NAV&&tab!=='home'&&<div style={{background:'#12022a',borderBottom:'1px solid #3b0764',padding:'8px 12px'}}>
+        <button onClick={()=>loadTab('home')} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',padding:'6px 12px',fontSize:13,cursor:'pointer'}}>← Volver a Inicio</button>
+      </div>}
 
       <div style={{maxWidth:480,margin:'0 auto',padding:16}}>
 
@@ -1020,6 +1024,7 @@ export default function HachiMiner() {
               {icon:'🔒',label:'Lock',tab:'lock' as Tab,delay:0.3},
               {icon:'🌊',label:'Pools',tab:'pools' as Tab,delay:0.6},
               {icon:'⛏️',label:'WLD Miner',tab:'wldminer' as Tab,delay:0.9,isNew:true},
+              {icon:'🗳️',label:'Votación',tab:'voting' as Tab,delay:1.2},
             ].map(btn=><button key={btn.tab} onClick={()=>loadTab(btn.tab)} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'12px 4px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer',animation:`quickAccessPulse 3s ease-in-out infinite`,animationDelay:`${btn.delay}s`}}>
               {(btn as any).isNew&&<span style={{position:'absolute',top:-6,right:-6,background:'#f59e0b',color:'#1e0840',fontSize:8,fontWeight:800,padding:'2px 5px',borderRadius:8,boxShadow:'0 0 8px rgba(245,158,11,.6)'}}>NUEVO</span>}
               <span style={{fontSize:22}}>{btn.icon}</span>
@@ -1217,6 +1222,32 @@ export default function HachiMiner() {
               <button onClick={claimWldMinerAction} disabled={claimingWldMiner||(wldMiner.pendingHachi<=0&&wldMiner.pendingDrachma<=0)} style={{...btnG,marginTop:8,opacity:(wldMiner.pendingHachi>0||wldMiner.pendingDrachma>0)?1:0.4}}>{claimingWldMiner?'Reclamando...':'Reclamar'}</button>
             </div>}
           </>}
+        </div>}
+
+        {tab==='voting'&&<div>
+          <div style={sLabel}>🗳️ Votación — Partido Hachi en World Republic</div>
+          <div style={card}>
+            {(()=>{
+              const open = isVotingOpen()
+              const secs = open ? 0 : secondsUntilNextVoting()
+              const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600)
+              return <div style={{textAlign:'center',marginBottom:12}}>
+                <div style={{fontSize:14,fontWeight:800,color:open?'#3fb950':'#e6edf3',marginBottom:4}}>{open?'✓ Votación abierta ahora mismo':'⏳ Próxima votación'}</div>
+                {!open&&<div style={{fontSize:12,color:'#8b949e'}}>Faltan <strong style={{color:'#fbbf24'}}>{d}d {h}h</strong></div>}
+              </div>
+            })()}
+            <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
+              🎁 <strong>5,000 SUSHI + 2,000 Drachma</strong> a repartir entre todos los participantes (sin sorteo). Solo tenés que compartir la captura de tu voto en el grupo DEX de la comunidad (WhatsApp o Telegram, abajo).
+            </div>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:12,lineHeight:1.6}}>
+              La votación se abre todas las semanas, de <strong>jueves 20:00</strong> a <strong>domingo 19:59</strong> (hora de Chile / GMT-4).
+            </div>
+            <a href="https://www.worldrepublic.org/es/govern/parties/1f9bc8d0-9ae5-46fe-b6e1-0282cb782c41?ref=GEFSRZRZ" target="_blank" rel="noopener noreferrer" style={{display:'block',textAlign:'center',background:'linear-gradient(135deg,#7c3aed,#a78bfa)',color:'#fff',fontSize:13,fontWeight:700,padding:'11px 20px',borderRadius:10,textDecoration:'none',boxShadow:'0 0 16px rgba(124,58,237,.4)',marginBottom:10}}>Ir al Partido Hachi →</a>
+            <div style={{display:'flex',gap:8}}>
+              <a href="https://whatsapp.com/channel/0029Vb7aycxDjiOasgPK2k1h" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 8px',borderRadius:10,background:'linear-gradient(135deg,#25D366,#128C7E)',color:'#fff',fontSize:12,fontWeight:700,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/whatsapp.svg" alt="" width={16} height={16} style={{filter:'brightness(0) invert(1)'}} />Canal Oficial</a>
+              <a href="https://t.me/+mg3Tt_4pZJs4NTAx" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px 8px',borderRadius:8,border:'1px solid #229ED9',color:'#229ED9',fontSize:12,fontWeight:600,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/telegram.svg" alt="" width={16} height={16} style={{filter:'invert(52%) sepia(89%) saturate(1996%) hue-rotate(166deg) brightness(97%) contrast(96%)'}} />Telegram</a>
+            </div>
+          </div>
         </div>}
 
         {tab==='pools'&&<div>
