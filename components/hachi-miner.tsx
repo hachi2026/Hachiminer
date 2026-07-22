@@ -60,6 +60,20 @@ function secondsUntilNextVoting(): number {
   return Math.floor(diff)
 }
 
+const DRACHMA_MINER_ADDR = '0x19d23871C64F29e22F31AcC094A255e5B1aAD577'
+const DRACHMA_MINER_ABI = [
+  'function getUserTier(address) view returns (uint8)',
+  'function costInHachi(uint8) view returns (uint256)',
+  'function tierDrachmaAmounts(uint256) view returns (uint256)',
+  'function mineDrachma(uint8,uint256) returns (uint256)',
+  'function claimDrachma(uint256)',
+  'function activeMineId(address) view returns (uint256)',
+  'function mines(uint256) view returns (address,uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bool)',
+  'function pendingDrachma(uint256) view returns (uint256)',
+  'function drachmaPool() view returns (uint256)',
+  'function drachmaCommitted() view returns (uint256)',
+]
+
 const WLD_MINER_ADDR = '0x35C82EC1C5414b228eF39b65fAC545409fc92d75'
 const WLD_MINER_ABI = [
   'function getUserTier(address) view returns (uint8)',
@@ -140,7 +154,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -257,6 +271,9 @@ export default function HachiMiner() {
   const [basicBoughtToday, setBasicBoughtToday] = useState(0)
   const [hachiRaw, setHachiRaw] = useState(0)
   const [weeklyBonus, setWeeklyBonus] = useState({dailyRate:0, pending:0, everClaimed:false})
+  const [drachmaMiner, setDrachmaMiner] = useState({tier:255, amounts:[0,0,0,0], costs:[0,0,0,0], activeMineId:0, active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0, poolFree:0})
+  const [selDrachmaTier, setSelDrachmaTier] = useState(0)
+  const [showInfoDrachma, setShowInfoDrachma] = useState(false)
   const [wldMiner, setWldMiner] = useState({tier:255, cap:0, activeMineId:0, active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0, poolFreeHachi:0, poolFreeDrachma:0})
   const [selWldAmount, setSelWldAmount] = useState('')
   const [selWldVariant, setSelWldVariant] = useState(0)
@@ -694,6 +711,7 @@ export default function HachiMiner() {
     if (v==='lock') loadLock(p)
     if (v==='pools') loadPools(p)
     if (v==='wldminer') loadWldMiner(addr, p)
+    if (v==='drachmaminer') loadDrachmaMiner(addr, p)
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -734,6 +752,57 @@ export default function HachiMiner() {
       ])
       setWeeklyBonus({dailyRate: fe(dailyRate), pending: fe(pending), everClaimed: Number(lastAction) > 0})
     } catch(e) {}
+  }
+
+  const loadDrachmaMiner = async (a: string, p: ethers.JsonRpcProvider) => {
+    try {
+      const dm = new ethers.Contract(DRACHMA_MINER_ADDR, DRACHMA_MINER_ABI, p)
+      const [tier, activeId] = await Promise.all([dm.getUserTier(a), dm.activeMineId(a)])
+      const amounts = await Promise.all([0,1,2,3].map(i => dm.tierDrachmaAmounts(i)))
+      const costs = await Promise.all([0,1,2,3].map(i => dm.costInHachi(i).catch(() => BigInt(0))))
+
+      let mineInfo = {active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0}
+      if (Number(activeId) > 0) {
+        const [m, pending] = await Promise.all([dm.mines(activeId), dm.pendingDrachma(activeId)])
+        mineInfo = {active: m[8], drachmaTotal: fe(m[3]), drachmaClaimed: fe(m[4]), pending: fe(pending), endTime: Number(m[6])}
+      }
+
+      const [dPool, dCommitted]: [bigint, bigint] = await Promise.all([dm.drachmaPool(), dm.drachmaCommitted()])
+      setDrachmaMiner({
+        tier: Number(tier),
+        amounts: amounts.map(fe),
+        costs: costs.map(fe),
+        activeMineId: Number(activeId),
+        poolFree: fe(dPool - dCommitted),
+        ...mineInfo,
+      })
+    } catch(e) {}
+  }
+
+  const mineDrachmaAction = async () => {
+    if (!connected) { toast_('Conectá tu wallet primero', '#f85149'); return }
+    try {
+      toast_('Minando Drachma...', '#d29922')
+      const costWithSlippage = drachmaMiner.costs[selDrachmaTier] * 1.02
+      const costWei = pe(costWithSlippage)
+      await sendTxMulti([
+        ...buildPermit2Approvals(C.hachi, DRACHMA_MINER_ADDR, costWei),
+        { to: DRACHMA_MINER_ADDR, abi: DRACHMA_MINER_ABI, fnName: 'mineDrachma', args: [selDrachmaTier, costWei] },
+      ])
+      toast_('✓ Drachma en generación (15 días)', '#3fb950')
+      loadDrachmaMiner(addr, rpc())
+    } catch(e: any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    }
+  }
+
+  const claimDrachmaMineAction = async () => {
+    try {
+      toast_('Reclamando Drachma...', '#d29922')
+      await sendTx(DRACHMA_MINER_ADDR, DRACHMA_MINER_ABI, 'claimDrachma', [drachmaMiner.activeMineId])
+      toast_('✓ Drachma reclamado', '#3fb950')
+      loadDrachmaMiner(addr, rpc())
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
 
   const loadWldMiner = async (a: string, p: ethers.JsonRpcProvider) => {
@@ -1025,34 +1094,12 @@ export default function HachiMiner() {
               {icon:'🌊',label:'Pools',tab:'pools' as Tab,delay:0.6},
               {icon:'⛏️',label:'WLD Miner',tab:'wldminer' as Tab,delay:0.9,isNew:true},
               {icon:'🗳️',label:'Votación',tab:'voting' as Tab,delay:1.2},
+              {icon:'🪙',label:'Drachma Miner',tab:'drachmaminer' as Tab,delay:1.5,iconImg:'https://assets.geckoterminal.com/0gp3m01cu8d61jd4n9nmhkvn5auh'},
             ].map(btn=><button key={btn.tab} onClick={()=>loadTab(btn.tab)} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'12px 4px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer',animation:`quickAccessPulse 3s ease-in-out infinite`,animationDelay:`${btn.delay}s`}}>
               {(btn as any).isNew&&<span style={{position:'absolute',top:-6,right:-6,background:'#f59e0b',color:'#1e0840',fontSize:8,fontWeight:800,padding:'2px 5px',borderRadius:8,boxShadow:'0 0 8px rgba(245,158,11,.6)'}}>NUEVO</span>}
-              <span style={{fontSize:22}}>{btn.icon}</span>
+              {(btn as any).iconImg ? <img src={(btn as any).iconImg} alt="" width={22} height={22} style={{borderRadius:11,objectFit:'cover'}} /> : <span style={{fontSize:22}}>{btn.icon}</span>}
               <span style={{fontSize:10,fontWeight:600}}>{btn.label}</span>
             </button>)}
-          </div>
-          <div style={card}>
-            <div style={cTitle}>🗳️ Votación — Partido Hachi en World Republic</div>
-            {(()=>{
-              const open = isVotingOpen()
-              const secs = open ? 0 : secondsUntilNextVoting()
-              const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600)
-              return <div style={{textAlign:'center',marginBottom:12}}>
-                <div style={{fontSize:14,fontWeight:800,color:open?'#3fb950':'#e6edf3',marginBottom:4}}>{open?'✓ Votación abierta ahora mismo':'⏳ Próxima votación'}</div>
-                {!open&&<div style={{fontSize:12,color:'#8b949e'}}>Faltan <strong style={{color:'#fbbf24'}}>{d}d {h}h</strong></div>}
-              </div>
-            })()}
-            <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
-              🎁 <strong>Recibís 10,000 SUSHI</strong> por tu voto, y además participás de un <strong>sorteo aleatorio</strong>. Solo tenés que compartir la captura de tu voto en la comunidad (WhatsApp o Telegram, abajo).
-            </div>
-            <div style={{fontSize:11,color:'#8b949e',marginBottom:12,lineHeight:1.6}}>
-              La votación se abre todas las semanas, de <strong>jueves 20:00</strong> a <strong>domingo 19:59</strong> (hora de Chile / GMT-4).
-            </div>
-            <a href="https://www.worldrepublic.org/es/govern/parties/1f9bc8d0-9ae5-46fe-b6e1-0282cb782c41?ref=GEFSRZRZ" target="_blank" rel="noopener noreferrer" style={{display:'block',textAlign:'center',background:'linear-gradient(135deg,#7c3aed,#a78bfa)',color:'#fff',fontSize:13,fontWeight:700,padding:'11px 20px',borderRadius:10,textDecoration:'none',boxShadow:'0 0 16px rgba(124,58,237,.4)',marginBottom:10}}>Ir al Partido Hachi →</a>
-            <div style={{display:'flex',gap:8}}>
-              <a href="https://whatsapp.com/channel/0029Vb7aycxDjiOasgPK2k1h" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 8px',borderRadius:10,background:'linear-gradient(135deg,#25D366,#128C7E)',color:'#fff',fontSize:12,fontWeight:700,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/whatsapp.svg" alt="" width={16} height={16} style={{filter:'brightness(0) invert(1)'}} />Canal Oficial</a>
-              <a href="https://t.me/+mg3Tt_4pZJs4NTAx" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px 8px',borderRadius:8,border:'1px solid #229ED9',color:'#229ED9',fontSize:12,fontWeight:600,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/telegram.svg" alt="" width={16} height={16} style={{filter:'invert(52%) sepia(89%) saturate(1996%) hue-rotate(166deg) brightness(97%) contrast(96%)'}} />Telegram</a>
-            </div>
           </div>
           <div style={card}><div style={cTitle}>HACHI</div>
             <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
@@ -1248,6 +1295,43 @@ export default function HachiMiner() {
               <a href="https://t.me/+mg3Tt_4pZJs4NTAx" target="_blank" rel="noopener noreferrer" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px 8px',borderRadius:8,border:'1px solid #229ED9',color:'#229ED9',fontSize:12,fontWeight:600,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/telegram.svg" alt="" width={16} height={16} style={{filter:'invert(52%) sepia(89%) saturate(1996%) hue-rotate(166deg) brightness(97%) contrast(96%)'}} />Telegram</a>
             </div>
           </div>
+        </div>}
+
+        {tab==='drachmaminer'&&<div>
+          <div style={sLabel}>🪙 Drachma Miner</div>
+          <div style={{fontSize:10,color:'#8b949e',marginBottom:8,textAlign:'right'}}>Pool disponible: {drachmaMiner.poolFree.toFixed(2)} Drachma</div>
+          <button onClick={()=>setShowInfoDrachma(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'6px 12px',cursor:'pointer',marginBottom:10,width:'100%'}}>ℹ️ ¿Cómo funciona el Drachma Miner?</button>
+          {showInfoDrachma&&<div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
+            Con una licencia WLD activa o un Lock de al menos 50,000 HACHI, podés "minar" Drachma: elegís un nivel (según tu tier más alto) y pagás HACHI por un monto fijo de Drachma, con un descuento sobre el precio real de mercado.
+            <br/><br/>
+            El Drachma no llega de golpe — se genera de a poco durante 15 días, y lo vas reclamando cuando quieras con el botón "Reclamar Drachma".
+            <br/><br/>
+            Solo podés tener <strong>1 minería activa a la vez</strong> — cuando termine de generarse del todo, podés arrancar una nueva.
+          </div>}
+          {drachmaMiner.tier===255?<div style={empty}><div style={{fontSize:28}}>🔒</div><div>Necesitás una licencia WLD o Lock activo para acceder</div></div>:<>
+            <div style={card}>
+              <div style={cTitle}>Tu tier: {['Básica','Estándar','Premium','Elite'][drachmaMiner.tier]}</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12,marginTop:8}}>
+                {['Básica','Estándar','Premium','Elite'].map((n,i)=>{
+                  const locked = i > drachmaMiner.tier
+                  return <div key={i} onClick={()=>{if(!locked) setSelDrachmaTier(i)}} style={{...lCard,border:`1px solid ${selDrachmaTier===i?'#fbbf24':'#5b21b6'}`,background:selDrachmaTier===i?'rgba(251,191,36,.08)':'#1e0840',opacity:locked?0.35:1,cursor:locked?'not-allowed':'pointer'}}>
+                    <div style={{fontSize:11,fontWeight:700}}>{n}</div>
+                    <div style={{fontFamily:'monospace',fontSize:16,fontWeight:700,color:'#60a5fa'}}>{drachmaMiner.amounts[i].toFixed(2)} Drachma</div>
+                    <div style={{fontSize:10,color:'#8b949e'}}>Costo: {drachmaMiner.costs[i].toFixed(4)} HACHI</div>
+                  </div>
+                })}
+              </div>
+              <button onClick={mineDrachmaAction} disabled={!connected||drachmaMiner.active} style={{...btnP,opacity:(!connected||drachmaMiner.active)?0.4:1}}>{drachmaMiner.active?'Ya tenés una mina activa':`Minar · ${drachmaMiner.costs[selDrachmaTier].toFixed(4)} HACHI`}</button>
+            </div>
+            {drachmaMiner.active&&<div style={{...card,marginTop:12}}>
+              <div style={cTitle}>Tu minería activa</div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Total</span><span style={{fontFamily:'monospace'}}>{drachmaMiner.drachmaTotal.toFixed(2)} Drachma</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Ya reclamado</span><span style={{fontFamily:'monospace'}}>{drachmaMiner.drachmaClaimed.toFixed(2)} Drachma</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente ahora</span><span style={{fontFamily:'monospace',color:'#3fb950'}}>{drachmaMiner.pending.toFixed(4)} Drachma</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Termina</span><span style={{fontFamily:'monospace'}}>{new Date(drachmaMiner.endTime*1000).toLocaleDateString()}</span></div>
+              <button onClick={claimDrachmaMineAction} disabled={drachmaMiner.pending<=0} style={{...btnG,marginTop:8,opacity:drachmaMiner.pending>0?1:0.4}}>Reclamar Drachma</button>
+            </div>}
+          </>}
         </div>}
 
         {tab==='pools'&&<div>
