@@ -75,6 +75,18 @@ const DRACHMA_MINER_ABI = [
   'function mineDuration() view returns (uint256)',
 ]
 
+const VIP_HOLDERS_ADDR = '0x75eD38D459c30656128dF6c9825edfB1A50623af'
+const VIP_HOLDERS_ABI = [
+  'function getVipLevel(address) view returns (uint8)',
+  'function pendingHachi(address) view returns (uint256)',
+  'function previewExchange(address) view returns (uint256,uint256,uint256)',
+  'function exchange(uint8,uint256) returns (uint8,uint256)',
+  'function tierMinAmount(uint256) view returns (uint256)',
+  'function tierBonusBps(uint256) view returns (uint256)',
+  'function drachmaPool() view returns (uint256)',
+  'function sushiPool() view returns (uint256)',
+]
+
 const WLD_MINER_ADDR = '0x35C82EC1C5414b228eF39b65fAC545409fc92d75'
 const WLD_MINER_ABI = [
   'function getUserTier(address) view returns (uint8)',
@@ -287,6 +299,12 @@ export default function HachiMiner() {
   const [wldRaw, setWldRaw]     = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
+  const [vipData, setVipData] = useState({level:255, pendingHachi:0, drachmaOut:0, sushiOut:0, drachmaPoolFree:0, sushiPoolFree:0})
+  const [vipPreferredToken, setVipPreferredToken] = useState(0)
+  const [showInfoVip, setShowInfoVip] = useState(false)
+  const [exchangingVip, setExchangingVip] = useState(false)
+  const [showDeposits, setShowDeposits] = useState(false)
+  const [showInfoTiers, setShowInfoTiers] = useState(false)
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [platformStats, setPlatformStats] = useState({totalLocked:'—',totalUsers:'—'})
   const [depositAmt, setDepositAmt] = useState('')
@@ -709,7 +727,7 @@ export default function HachiMiner() {
     setTab(v); if (!connected) return
     const p = rpc()
     if (v==='lics') loadWLDLics(p)
-    if (v==='lock') loadLock(p)
+    if (v==='lock') { loadLock(p); loadVipHolders(addr, p) }
     if (v==='pools') loadPools(p)
     if (v==='wldminer') loadWldMiner(addr, p)
     if (v==='drachmaminer') loadDrachmaMiner(addr, p)
@@ -806,6 +824,40 @@ export default function HachiMiner() {
       loadDrachmaMiner(addr, rpc())
       loadBal(addr, rpc())
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
+  }
+
+  const loadVipHolders = async (a: string, p: ethers.JsonRpcProvider) => {
+    try {
+      const vh = new ethers.Contract(VIP_HOLDERS_ADDR, VIP_HOLDERS_ABI, p)
+      const [level, preview, dPool, sPool] = await Promise.all([
+        vh.getVipLevel(a), vh.previewExchange(a), vh.drachmaPool(), vh.sushiPool(),
+      ])
+      setVipData({
+        level: Number(level),
+        pendingHachi: fe(preview[0]),
+        drachmaOut: fe(preview[1]),
+        sushiOut: fe(preview[2]),
+        drachmaPoolFree: fe(dPool),
+        sushiPoolFree: fe(sPool),
+      })
+    } catch(e) {}
+  }
+
+  const exchangeVipAction = async () => {
+    if (!connected) { toast_('Conectá tu wallet primero', '#f85149'); return }
+    setExchangingVip(true)
+    try {
+      toast_('Cambiando...', '#d29922')
+      const vh = new ethers.Contract(VIP_HOLDERS_ADDR, VIP_HOLDERS_ABI, rpc())
+      const [, drachmaOut, sushiOut] = await vh.previewExchange(addr)
+      const expectedOut = vipPreferredToken === 0 ? drachmaOut : sushiOut
+      const minOut = (expectedOut * BigInt(95)) / BigInt(100)
+      await sendTx(VIP_HOLDERS_ADDR, VIP_HOLDERS_ABI, 'exchange', [vipPreferredToken, minOut])
+      toast_('✓ Cambio realizado', '#3fb950')
+      loadVipHolders(addr, rpc())
+      loadBal(addr, rpc())
+    } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
+    finally { setExchangingVip(false) }
   }
 
   const loadWldMiner = async (a: string, p: ethers.JsonRpcProvider) => {
@@ -1216,22 +1268,61 @@ export default function HachiMiner() {
           <input value={depositAmt} onChange={e=>setDepositAmt(e.target.value)} type="number" placeholder="Cantidad de HACHI" style={{background:'#12022a',border:'1px solid #5b21b6',borderRadius:8,padding:'10px 12px',fontSize:14,color:'#e6edf3',width:'100%',marginBottom:8,fontFamily:'monospace'}} />
           <div style={{fontSize:11,color:'#d29922',marginBottom:8,lineHeight:1.4}}>⚠ Depositar reinicia el cooldown de 24h para cobrar APY</div>
           <button onClick={doDeposit} style={btnP}>Depositar</button>
-          <div style={card}><div style={cTitle}>🌍 Total de la comunidad</div>
-            {[['HACHI bloqueado',platformStats.totalLocked],['Usuarios activos',platformStats.totalUsers]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e'}}>{l}</span><span style={{fontFamily:'monospace',fontWeight:600}}>{v}</span></div>)}
-          </div>
-          <div style={{...card,marginTop:12}}><div style={cTitle}>Niveles del Lock</div>
-            <div style={{fontSize:11,color:'#8b949e',marginBottom:10,lineHeight:1.5}}>Con menos de 50,000 HACHI bloqueados (Sin tier) accedés a las licencias Bocado Básicas, pero no generás APY. Desde 50,000 HACHI (Tier 1 — Akira) empezás a ganar rendimiento.</div>
-            {[{name:'Akira',min:'50,000',apy:'10%'},{name:'Zen',min:'200,000',apy:'20%'},{name:'Koban',min:'500,000',apy:'30%'},{name:'Tayko',min:'750,000',apy:'40%'},{name:'Hachi',min:'1,000,000',apy:'50%'}].map(({name,min,apy})=>{
+          <button onClick={()=>setShowInfoTiers(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'8px 12px',cursor:'pointer',margin:'8px 0',width:'100%'}}>ℹ️ Niveles del Lock — Saber más</button>
+          {showInfoTiers&&<div style={{...card,marginTop:0}}>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:10,lineHeight:1.5}}>Con menos de 50,000 HACHI bloqueados (Sin tier) accedés a las licencias Bocado Básicas, pero no generás APY. Desde 50,000 HACHI (Tier 1 — Akira) empezás a ganar rendimiento. Desde 250,000 HACHI además accedés a la Reinversión VIP.</div>
+            {[{name:'Akira',min:'50,000',apy:'10%',vip:null},{name:'Zen',min:'200,000',apy:'20%',vip:null},{name:'Koban',min:'500,000',apy:'30%',vip:'8%'},{name:'Tayko',min:'750,000',apy:'40%',vip:'10%'},{name:'Hachi',min:'1,000,000',apy:'50%',vip:'12%'}].map(({name,min,apy,vip})=>{
               const isCurrent = lockData.tier === name
-              return <div key={name} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 6px',borderRadius:6,marginBottom:2,background:isCurrent?'rgba(52,211,153,.08)':'transparent',border:isCurrent?'1px solid rgba(52,211,153,.3)':'1px solid transparent'}}>
-                <span style={{fontSize:13,fontWeight:isCurrent?700:400,color:isCurrent?'#34d399':'#8b949e'}}>{isCurrent?'→ ':''}{name}</span>
-                <span style={{fontFamily:'monospace',fontSize:11,color:'#8b949e'}}>{min} HACHI</span>
-                <span style={{fontFamily:'monospace',fontSize:12,fontWeight:600,color:isCurrent?'#fbbf24':'#6b7280'}}>{apy}</span>
+              return <div key={name} style={{padding:'7px 6px',borderRadius:6,marginBottom:2,background:isCurrent?'rgba(52,211,153,.08)':'transparent',border:isCurrent?'1px solid rgba(52,211,153,.3)':'1px solid transparent'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span style={{fontSize:13,fontWeight:isCurrent?700:400,color:isCurrent?'#34d399':'#8b949e'}}>{isCurrent?'→ ':''}{name}</span>
+                  <span style={{fontFamily:'monospace',fontSize:11,color:'#8b949e'}}>{min} HACHI</span>
+                  <span style={{fontFamily:'monospace',fontSize:12,fontWeight:600,color:isCurrent?'#fbbf24':'#6b7280'}}>{apy} APY</span>
+                </div>
+                {vip&&<div style={{fontSize:10,color:'#fbbf24',marginTop:2,textAlign:'right'}}>💎 +{vip} bono en Reinversión VIP</div>}
+                {name==='Zen'&&<div style={{fontSize:10,color:'#8b949e',marginTop:2,textAlign:'right'}}>Con 250,000+ (dentro de este nivel): 5% bono en Reinversión VIP</div>}
               </div>
             })}
+          </div>}
+          <button onClick={()=>setShowDeposits(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'8px 12px',cursor:'pointer',margin:'8px 0',width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>📦 Mis depósitos ({lockBatches.length})</span>
+            <span>{showDeposits?'▲':'▼'}</span>
+          </button>
+          {showDeposits&&(lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>))}
+
+          <div style={{...card,marginTop:12,border:'1px solid #fbbf24',boxShadow:'0 0 16px rgba(251,191,36,.2)'}}>
+            <div style={{...cTitle,display:'flex',alignItems:'center',gap:6}}>💎 Reinversión VIP</div>
+            <div style={{background:'rgba(96,165,250,.1)',border:'1px solid rgba(96,165,250,.4)',borderRadius:8,padding:12,marginTop:8,marginBottom:4,fontSize:12,color:'#93c5fd',lineHeight:1.5,textAlign:'center'}}>
+              🔜 <strong>Próximamente:</strong> cambiá tus ganancias acumuladas por SUSHI o Drachma, con un pequeño interés extra. Los pools se fondean el día 30 — mientras tanto, seguís acumulando ganancias normalmente, sin perder nada.
+            </div>
+            <button onClick={()=>setShowInfoVip(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'6px 12px',cursor:'pointer',margin:'8px 0',width:'100%'}}>ℹ️ ¿Qué es y cómo funciona?</button>
+            {showInfoVip&&<div style={{background:'rgba(251,191,36,.08)',border:'1px solid rgba(251,191,36,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#fde68a',lineHeight:1.6}}>
+              <strong>Es un beneficio exclusivo para holders grandes</strong> — con 250,000+ HACHI lockeados, en vez de vender el HACHI que vas generando por APY, lo cambiás acá directo por Drachma o SUSHI, con un bono extra según tu nivel:
+              <br/>• 250,000 - 499,999: <strong>5%</strong> de bono
+              <br/>• 500,000 - 749,999: <strong>8%</strong> de bono
+              <br/>• 750,000 - 999,999: <strong>10%</strong> de bono
+              <br/>• 1,000,000+: <strong>12%</strong> de bono
+              <br/><br/>
+              El HACHI que vas generando se acumula solo (calculado en vivo desde tu Lock), hasta un tope de <strong>4 semanas</strong> — no se pierde mientras no lo uses, y podés cambiarlo cuando quieras.
+              <br/><br/>
+              Elegís si preferís recibir Drachma o SUSHI; si ese pool no tiene fondos en ese momento, usa el otro automáticamente. El HACHI que aportás ayuda a financiar licencias WLD para el resto de la comunidad — así tu ganancia sigue generando valor para el sistema, en vez de salir a la venta.
+            </div>}
+            {vipData.level===255?<div style={{textAlign:'center',padding:'12px 8px',color:'#8b949e',fontSize:13}}>🔒 Necesitás al menos 250,000 HACHI lockeados para acceder</div>:<>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu nivel</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#fbbf24'}}>{['5% bono','8% bono','10% bono','12% bono'][vipData.level]}</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI acumulado</span><span style={{fontFamily:'monospace'}}>{vipData.pendingHachi.toFixed(4)}</span></div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,margin:'10px 0'}}>
+                <div onClick={()=>setVipPreferredToken(0)} style={{...lCard,padding:10,border:`1px solid ${vipPreferredToken===0?'#fbbf24':'#5b21b6'}`,background:vipPreferredToken===0?'rgba(251,191,36,.08)':'#1e0840',cursor:'pointer',textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'#8b949e'}}>Drachma</div>
+                  <div style={{fontFamily:'monospace',fontWeight:700,color:'#60a5fa'}}>{vipData.drachmaOut.toFixed(2)}</div>
+                </div>
+                <div onClick={()=>setVipPreferredToken(1)} style={{...lCard,padding:10,border:`1px solid ${vipPreferredToken===1?'#fbbf24':'#5b21b6'}`,background:vipPreferredToken===1?'rgba(251,191,36,.08)':'#1e0840',cursor:'pointer',textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'#8b949e'}}>SUSHI</div>
+                  <div style={{fontFamily:'monospace',fontWeight:700,color:'#a78bfa'}}>{vipData.sushiOut.toFixed(2)}</div>
+                </div>
+              </div>
+              <button onClick={exchangeVipAction} disabled={exchangingVip||vipData.pendingHachi<=0} style={{...btnP,width:'100%',opacity:(exchangingVip||vipData.pendingHachi<=0)?0.4:1}}>{exchangingVip?'Cambiando...':vipData.pendingHachi<=0?'Nada acumulado todavía':'Cambiar ahora'}</button>
+            </>}
           </div>
-          <div style={sLabel}>Mis depósitos</div>
-          {lockBatches.length===0?<div style={empty}><div>Sin depósitos aún</div></div>:lockBatches.map((b,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:'1px solid #3b0764',fontSize:12}}><span style={{fontFamily:'monospace'}}>{fmt(b.amount)} HACHI</span><span style={{color:b.ready?'#3fb950':'#8b949e'}}>{b.ready?'✓ Disponible':'Hasta '+b.unlocks.toLocaleDateString()}</span></div>)}
         </div>}
 
         {tab==='wldminer'&&<div>
