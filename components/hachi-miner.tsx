@@ -804,6 +804,7 @@ export default function HachiMiner() {
       await sendTx(DRACHMA_MINER_ADDR, DRACHMA_MINER_ABI, 'claimDrachma', [drachmaMiner.activeMineId])
       toast_('✓ Drachma reclamado', '#3fb950')
       loadDrachmaMiner(addr, rpc())
+      loadBal(addr, rpc())
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
 
@@ -875,6 +876,7 @@ export default function HachiMiner() {
       await sendTx(WLD_MINER_ADDR, WLD_MINER_ABI, 'claimRewards', [wldMiner.activeMineId])
       toast_('✓ Reclamado', '#3fb950')
       loadWldMiner(addr, rpc())
+      loadBal(addr, rpc())
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
     finally { setClaimingWldMiner(false) }
   }
@@ -886,6 +888,7 @@ export default function HachiMiner() {
       await sendTx(WEEKLY_BONUS_ADDR, WEEKLY_BONUS_ABI, 'claimBonus', [])
       toast_('✓ Bono semanal reclamado', '#3fb950')
       loadWeeklyBonus(addr, rpc())
+      loadBal(addr, rpc())
     } catch(e: any) {
       toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
     } finally {
