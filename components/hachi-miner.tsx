@@ -168,7 +168,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -708,6 +708,19 @@ export default function HachiMiner() {
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
   const claimWLD = (id: bigint) => execTx('Cobrando HACHI', C.core, CORE, 'claimWLDHachi', [id])
+
+  const claimAllWLD = async () => {
+    if (wldLics.length === 0) return
+    try {
+      toast_('Cobrando todas las licencias...', '#d29922')
+      const calls = wldLics.map(({id}) => ({ to: C.core, abi: CORE, fnName: 'claimWLDHachi', args: [id] }))
+      await sendTxMulti(calls)
+      toast_('✓ Todo cobrado', '#3fb950')
+      await loadAll(addr)
+    } catch(e: any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    }
+  }
   const doDeposit = async () => {
     if (!depositAmt||Number(depositAmt)<=0) { toast_('Ingresa un monto válido','#f85149'); return }
     try {
@@ -1175,12 +1188,10 @@ export default function HachiMiner() {
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:14}}>
             {[
-              {icon:'📜',label:'Licencias',tab:'lics' as Tab,delay:0},
+              {icon:'⛏️',label:'Minería',tab:'mineria' as Tab,delay:0,isNew:true},
               {icon:'🔒',label:'Lock',tab:'lock' as Tab,delay:0.3},
               {icon:'🌊',label:'Pools',tab:'pools' as Tab,delay:0.6},
-              {icon:'⛏️',label:'WLD Miner',tab:'wldminer' as Tab,delay:0.9,isNew:true},
               {icon:'🗳️',label:'Votación',tab:'voting' as Tab,delay:1.2},
-              {icon:'🪙',label:'Drachma Miner',tab:'drachmaminer' as Tab,delay:1.5,iconImg:'https://assets.geckoterminal.com/0gp3m01cu8d61jd4n9nmhkvn5auh'},
             ].map(btn=><button key={btn.tab} onClick={()=>loadTab(btn.tab)} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'12px 4px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer',animation:`quickAccessPulse 3s ease-in-out infinite`,animationDelay:`${btn.delay}s`}}>
               {(btn as any).isNew&&<span style={{position:'absolute',top:-6,right:-6,background:'#f59e0b',color:'#1e0840',fontSize:8,fontWeight:800,padding:'2px 5px',borderRadius:8,boxShadow:'0 0 8px rgba(245,158,11,.6)'}}>NUEVO</span>}
               {(btn as any).iconImg ? <img src={(btn as any).iconImg} alt="" width={22} height={22} style={{borderRadius:11,objectFit:'cover'}} /> : <span style={{fontSize:22}}>{btn.icon}</span>}
@@ -1217,68 +1228,81 @@ export default function HachiMiner() {
         </div>}
 
         {tab==='lics'&&<div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
-            <button onClick={()=>setLicTab('wld')} style={licTab==='wld'?btnP:btnGh}>💠 WLD</button>
-            <button onClick={()=>setLicTab('sushi')} style={{...(licTab==='sushi'?{...btnG,background:'transparent'}:btnGh),display:'flex',alignItems:'center',gap:6,justifyContent:'center'}}><img src="/hachi-cat-savings.png" width={20} height={20} style={{borderRadius:4,objectFit:'cover',flexShrink:0}} />Bocado</button>
+          <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-logo.png" alt="" width={44} height={44} style={{borderRadius:10,flexShrink:0,objectFit:'cover'}} />Hachi Miner</div>
+          <div style={sLabel}>Comprar licencia WLD</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+            {wldNames.map((n,i)=><div key={i} onClick={()=>setSelWLD(i)} style={{...lCard,border:`1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`,background:selWLD===i?'rgba(251,191,36,.08)':'#1e0840',boxShadow:selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none'}}>
+              <div style={{fontSize:11,fontWeight:700}}>{n}{i===3&&<span style={{color:'#34d399'}}> +5%</span>}</div>
+              <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([1,3,5,10][i]*wldHachi*(i===3?1.35:1.3)))}</div>
+              <div style={{fontSize:10,color:'#8b949e'}}>HACHI · 3 meses · {i===3?'35%':'30%'}</div>
+              <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{wldPrices[i]}</div>
+            </div>)}
           </div>
-          {licTab==='wld'&&<div>
-            <div style={sLabel}>Comprar licencia WLD</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-              {wldNames.map((n,i)=><div key={i} onClick={()=>setSelWLD(i)} style={{...lCard,border:`1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`,background:selWLD===i?'rgba(251,191,36,.08)':'#1e0840',boxShadow:selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none'}}>
-                <div style={{fontSize:11,fontWeight:700}}>{n}{i===3&&<span style={{color:'#34d399'}}> +5%</span>}</div>
-                <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([1,3,5,10][i]*wldHachi*(i===3?1.35:1.3)))}</div>
-                <div style={{fontSize:10,color:'#8b949e'}}>HACHI · 3 meses · {i===3?'35%':'30%'}</div>
-                <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{wldPrices[i]}</div>
-              </div>)}
-            </div>
-            <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
-            <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI||licsAvailNum<=0} style={{...btnP,opacity:(!connected||wldHachi>MAX_HACHI||licsAvailNum<=0)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':licsAvailNum<=0?'Sin stock disponible':`Comprar · ${wldPrices[selWLD]}`}</button>
-            <div style={sLabel}>Licencias WLD activas</div>
-            {!wldLicsLoaded?<div style={empty}><div style={{fontSize:28}}>⏳</div><div>Consultando tus licencias...</div></div>:wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:wldLics.map(({id,l,pend})=><div key={id.toString()} style={card}>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><strong>{['Básica','Estándar','Premium','Elite'][l[1]]}</strong><div style={{color:l[10]?'#3fb950':'#8b949e'}}>●</div></div>
+          <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+          <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI||licsAvailNum<=0} style={{...btnP,opacity:(!connected||wldHachi>MAX_HACHI||licsAvailNum<=0)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':licsAvailNum<=0?'Sin stock disponible':`Comprar · ${wldPrices[selWLD]}`}</button>
+          <div style={sLabel}>Mis licencias WLD</div>
+          {!wldLicsLoaded?<div style={empty}><div style={{fontSize:28}}>⏳</div><div>Consultando tus licencias...</div></div>:wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:<div style={card}>
+            {wldLics.map(({id,l,pend})=><div key={id.toString()} style={{borderBottom:'1px solid #3b0764',paddingBottom:10,marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><strong>{['Básica','Estándar','Premium','Elite'][l[1]]} <span style={{fontSize:11,color:'#8b949e'}}>#{id.toString()}</span></strong><div style={{color:l[10]?'#3fb950':'#8b949e'}}>●</div></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente</span><span style={{color:'#3fb950',fontFamily:'monospace'}}>{fmt(fe(pend))} HACHI</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Vence</span><span style={{fontFamily:'monospace'}}>{new Date(Number(l[7])*1000).toLocaleDateString()}</span></div>
-              <button onClick={()=>claimWLD(id)} style={{...btnG,marginTop:8}}>Cobrar HACHI</button>
             </div>)}
+            <button onClick={claimAllWLD} style={{...btnG,width:'100%',marginTop:4}}>Cobrar todo</button>
           </div>}
-          {licTab==='sushi'&&<div>
-            {wldTierActive===255&&<div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.35)',borderRadius:8,padding:20,textAlign:'center',marginBottom:12}}>
-              <div style={{fontSize:28,marginBottom:8}}>🔒</div>
-              <div style={{fontWeight:700,color:'#f87171',marginBottom:6}}>Necesitás una licencia WLD activa</div>
-              <div style={{fontSize:13,color:'#8b949e'}}>El Bocado ya no está disponible para quienes no tienen una licencia WLD.</div>
-            </div>}
-            {wldTierActive!==255&&<>
-              <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-cat-savings.png" alt="" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />Convertí tus HACHI en Bocado</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-                <div onClick={()=>setSelSUSHI(0)} style={{...lCard,border:`1px solid ${selSUSHI===0?'#fbbf24':'#5b21b6'}`,background:selSUSHI===0?'rgba(251,191,36,.08)':'#1e0840',cursor:'pointer'}}>
-                  <div style={{fontSize:11,fontWeight:700}}>{sushiNames[0]}</div>
-                  <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round(500*hachiSushi*1.25))}</div>
-                  <div style={{fontSize:10,color:'#8b949e'}}>SUSHI inmediato ×1.25</div>
-                  <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[0]}</div>
+        </div>}
+
+        {tab==='bocado'&&<div>
+          {wldTierActive===255&&<div style={{background:'rgba(248,113,113,.08)',border:'1px solid rgba(248,113,113,.35)',borderRadius:8,padding:20,textAlign:'center',marginBottom:12}}>
+            <div style={{fontSize:28,marginBottom:8}}>🔒</div>
+            <div style={{fontWeight:700,color:'#f87171',marginBottom:6}}>Necesitás una licencia WLD activa</div>
+            <div style={{fontSize:13,color:'#8b949e'}}>El Bocado ya no está disponible para quienes no tienen una licencia WLD.</div>
+          </div>}
+          {wldTierActive!==255&&<>
+            <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-cat-savings.png" alt="" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />Convertí tus HACHI en Bocado</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+              <div onClick={()=>setSelSUSHI(0)} style={{...lCard,border:`1px solid ${selSUSHI===0?'#fbbf24':'#5b21b6'}`,background:selSUSHI===0?'rgba(251,191,36,.08)':'#1e0840',cursor:'pointer'}}>
+                <div style={{fontSize:11,fontWeight:700}}>{sushiNames[0]}</div>
+                <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round(500*hachiSushi*1.25))}</div>
+                <div style={{fontSize:10,color:'#8b949e'}}>SUSHI inmediato ×1.25</div>
+                <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{sushiPrices[0]}</div>
+              </div>
+            </div>
+            <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+            {(()=>{
+              const maxBasicNow = wldTierActive===255?0:1
+              const dailyLimitHit = selSUSHI===0 && basicBoughtToday >= maxBasicNow
+              const label = dailyLimitHit ? '🚫 Límite diario alcanzado, volvé mañana' : `Comprar · ${sushiPrices[selSUSHI]}`
+              return <button onClick={buySUSHI} disabled={dailyLimitHit} style={{...btnG, opacity: dailyLimitHit?0.5:1, cursor: dailyLimitHit?'not-allowed':'pointer'}}>{label}</button>
+            })()}
+            {(()=>{
+              const tierLabel = !wldTierLoaded?'Consultando...':wldTierActive===255?'Sin licencia WLD':['Básica','Estándar','Premium','Elite'][wldTierActive]??'—'
+              const maxBasic  = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
+              return (
+                <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginTop:12,fontSize:12}}>
+                  <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
+                  <div style={row}><span style={{color:'#8b949e'}}>Bocados hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
                 </div>
-              </div>
-              <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
-              {(()=>{
-                const maxBasicNow = wldTierActive===255?0:1
-                const dailyLimitHit = selSUSHI===0 && basicBoughtToday >= maxBasicNow
-                const label = dailyLimitHit ? '🚫 Límite diario alcanzado, volvé mañana' : `Comprar · ${sushiPrices[selSUSHI]}`
-                return <button onClick={buySUSHI} disabled={dailyLimitHit} style={{...btnG, opacity: dailyLimitHit?0.5:1, cursor: dailyLimitHit?'not-allowed':'pointer'}}>{label}</button>
-              })()}
-              {(()=>{
-                const tierLabel = !wldTierLoaded?'Consultando...':wldTierActive===255?'Sin licencia WLD':['Básica','Estándar','Premium','Elite'][wldTierActive]??'—'
-                const maxBasic  = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
-                return (
-                  <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginTop:12,fontSize:12}}>
-                    <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
-                    <div style={row}><span style={{color:'#8b949e'}}>Bocados hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
-                  </div>
-                )
-              })()}
-              <div style={{background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:12,marginTop:12,fontSize:12,color:'#8b949e',lineHeight:1.5}}>
-                <strong style={{color:'#34d399'}}>Intercambio inmediato:</strong> pagás en HACHI y recibís SUSHI (base + 25%) al instante en tu wallet. Sin esperas ni cobros pendientes.
-              </div>
-            </>}
-          </div>}
+              )
+            })()}
+            <div style={{background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:12,marginTop:12,fontSize:12,color:'#8b949e',lineHeight:1.5}}>
+              <strong style={{color:'#34d399'}}>Intercambio inmediato:</strong> pagás en HACHI y recibís SUSHI (base + 25%) al instante en tu wallet. Sin esperas ni cobros pendientes.
+            </div>
+          </>}
+        </div>}
+
+        {tab==='mineria'&&<div>
+          <div style={sLabel}>⛏️ Minería</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginBottom:12}}>
+            {[
+              {icon:'📜',label:'Hachi Miner',action:()=>loadTab('lics'),iconImg:'/hachi-logo.png'},
+              {icon:'🍡',label:'Bocado',action:()=>loadTab('bocado'),iconImg:'/hachi-cat-savings.png'},
+              {icon:'🪙',label:'Drachma Miner',action:()=>loadTab('drachmaminer'),iconImg:'https://assets.geckoterminal.com/0gp3m01cu8d61jd4n9nmhkvn5auh'},
+              {icon:'⛏️',label:'WLD Miner',action:()=>loadTab('wldminer')},
+            ].map(btn=><button key={btn.label} onClick={btn.action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'16px 8px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer'}}>
+              {(btn as any).iconImg ? <img src={(btn as any).iconImg} alt="" width={26} height={26} style={{borderRadius:13,objectFit:'cover'}} /> : <span style={{fontSize:26}}>{btn.icon}</span>}
+              <span style={{fontSize:12,fontWeight:600}}>{btn.label}</span>
+            </button>)}
+          </div>
         </div>}
 
         {tab==='lock'&&<div>
