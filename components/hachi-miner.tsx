@@ -1089,7 +1089,11 @@ export default function HachiMiner() {
   // PANTALLA DE INICIO DE SESIÓN — se muestra mientras no haya wallet conectada
   if (!connected) {
     return (
-      <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#2a1f63 0%,#1d1a52 55%,#2b2c78 100%)',color:'#e6edf3',fontFamily:'Georgia,serif',display:'flex',flexDirection:'column'}}>
+      <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#2a1f63 0%,#1d1a52 55%,#2b2c78 100%)',color:'#e6edf3',fontFamily:'Georgia,serif',display:'flex',flexDirection:'column',position:'relative',overflow:'hidden'}}>
+        <style>{`
+          @keyframes orbitRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @keyframes orbitCounterRotate { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+        `}</style>
         {toast&&<div style={{position:'fixed',top:16,right:16,zIndex:999,padding:'10px 16px',borderRadius:8,background:'#161b22',border:`1px solid ${toast.color}`,color:toast.color,fontSize:13,maxWidth:320}}>{toast.msg}</div>}
 
         {/* selector de idioma arriba a la derecha */}
@@ -1097,28 +1101,43 @@ export default function HachiMiner() {
           {(['es','en','pt'] as Lang[]).map(l=><button key={l} onClick={()=>setLang(l)} style={{background:'none',border:`1px solid ${lang===l?'#a78bfa':'#30363d'}`,borderRadius:4,padding:'2px 8px',fontSize:11,cursor:'pointer',color:lang===l?'#e6edf3':'#8b949e'}}>{l.toUpperCase()}</button>)}
         </div>
 
-        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'8px 20px 40px',maxWidth:480,margin:'0 auto',width:'100%'}}>
+        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'8px 20px 40px',maxWidth:480,margin:'0 auto',width:'100%',position:'relative',zIndex:1}}>
 
           {/* HERO */}
-          <div style={{fontSize:56,marginBottom:8,filter:'drop-shadow(0 0 20px rgba(232,121,249,.6))'}}>⛏</div>
-          <h1 style={{fontSize:34,fontWeight:700,color:'#e879f9',textShadow:'0 0 18px rgba(232,121,249,.5)',margin:'0 0 8px',textAlign:'center'}}>HachiMiner</h1>
-          <p style={{fontSize:15,color:'#c4b5fd',fontStyle:'italic',textAlign:'center',margin:'0 0 28px',lineHeight:1.5,maxWidth:360}}>{loginCopy.tagline}</p>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:8}}>
+            <div style={{fontSize:38,filter:'drop-shadow(0 0 16px rgba(251,191,36,.6))'}}>⛏</div>
+            <h1 style={{fontSize:34,fontWeight:700,color:'#fbbf24',textShadow:'0 0 18px rgba(251,191,36,.5)',margin:0,textAlign:'center'}}>HachiMiner</h1>
+          </div>
+          <p style={{fontSize:15,color:'#c4b5fd',fontStyle:'italic',textAlign:'center',margin:'0 0 20px',lineHeight:1.5,maxWidth:360}}>{loginCopy.tagline}</p>
 
-          {/* QUÉ ES */}
-          <div style={{...card,width:'100%'}}>
-            <div style={cTitle}>{loginCopy.whatTitle}</div>
-            <p style={{fontSize:13,color:'#c9d1d9',lineHeight:1.6,margin:0}}>{loginCopy.whatDesc}</p>
+          {/* CTA */}
+          <button onClick={connectWallet} style={{...btnP,marginBottom:20,fontSize:15,padding:'14px 16px',width:'100%'}}>
+            {inWA ? loginCopy.ctaWA : loginCopy.cta}
+          </button>
+
+          {/* FEATURES — gato al centro, funciones alrededor en círculo */}
+          <div style={{position:'relative',width:300,height:300,margin:'0 auto 16px',maxWidth:'90vw'}}>
+            <img src="/hachi-cat-savings.png" alt="" style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',width:110,height:110,borderRadius:20,objectFit:'cover',boxShadow:'0 0 30px rgba(232,121,249,.6)',border:'2px solid #e879f9',zIndex:1}} />
+            <div style={{position:'absolute',inset:0,animation:'orbitRotate 40s linear infinite'}}>
+              {loginCopy.features.map((f,i)=>{
+                const n = loginCopy.features.length
+                const angle = (i / n) * 2 * Math.PI - Math.PI / 2
+                const radius = 125
+                const x = 150 + radius * Math.cos(angle)
+                const y = 150 + radius * Math.sin(angle)
+                return <div key={i} style={{position:'absolute',left:x,top:y,transform:'translate(-50%,-50%)',textAlign:'center',width:84}}>
+                  <div style={{animation:'orbitCounterRotate 40s linear infinite'}}>
+                    {(f as any).iconImg ? <img src={(f as any).iconImg} alt="" width={26} height={26} style={{borderRadius:13,objectFit:'cover',marginBottom:2,filter:'drop-shadow(0 0 6px rgba(124,58,237,.5))'}} /> : <div style={{fontSize:26,marginBottom:2,filter:'drop-shadow(0 0 6px rgba(124,58,237,.5))'}}>{f.icon}</div>}
+                    <div style={{fontSize:10,fontWeight:700,color:'#e6edf3',lineHeight:1.2}}>{f.title}</div>
+                  </div>
+                </div>
+              })}
+            </div>
           </div>
 
-          {/* FEATURES */}
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,width:'100%',marginBottom:12}}>
-            {loginCopy.features.map((f,i)=>(
-              <div key={i} style={{background:'#1e0840',border:'1px solid #5b21b6',borderRadius:10,padding:14,boxShadow:'0 0 12px rgba(124,58,237,.2)'}}>
-                <div style={{fontSize:22,marginBottom:6}}>{f.icon}</div>
-                <div style={{fontSize:13,fontWeight:700,color:'#e6edf3',marginBottom:3}}>{f.title}</div>
-                <div style={{fontSize:11,color:'#8b949e',lineHeight:1.5}}>{f.desc}</div>
-              </div>
-            ))}
+          <div style={{display:'flex',flexWrap:'wrap',gap:8,width:'100%',marginBottom:16}}>
+            <a href="https://whatsapp.com/channel/0029Vb7aycxDjiOasgPK2k1h" target="_blank" rel="noopener noreferrer" style={{flex:1,minWidth:90,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'11px 8px',borderRadius:10,background:'linear-gradient(135deg,#25D366,#128C7E)',color:'#fff',fontSize:12,fontWeight:700,textDecoration:'none',boxShadow:'0 2px 10px rgba(37,211,102,.35)'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/whatsapp.svg" alt="" width={16} height={16} style={{filter:'brightness(0) invert(1)'}} />Canal Oficial</a>
+            <a href="https://t.me/+mg3Tt_4pZJs4NTAx" target="_blank" rel="noopener noreferrer" style={{flex:1,minWidth:90,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 8px',borderRadius:8,border:'1px solid #229ED9',color:'#229ED9',fontSize:12,fontWeight:600,textDecoration:'none'}}><img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/telegram.svg" alt="" width={16} height={16} style={{filter:'invert(52%) sepia(89%) saturate(1996%) hue-rotate(166deg) brightness(97%) contrast(96%)'}} />Telegram</a>
           </div>
 
           {/* PASOS */}
@@ -1131,11 +1150,6 @@ export default function HachiMiner() {
               </div>
             ))}
           </div>
-
-          {/* CTA */}
-          <button onClick={connectWallet} style={{...btnP,marginTop:8,fontSize:15,padding:'14px 16px'}}>
-            {inWA ? loginCopy.ctaWA : loginCopy.cta}
-          </button>
           <p style={{fontSize:11,color:'#8b949e',textAlign:'center',marginTop:12,lineHeight:1.5}}>{loginCopy.disclaimer}</p>
         </div>
       </div>
