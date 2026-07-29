@@ -311,6 +311,7 @@ export default function HachiMiner() {
   const [showDeposits, setShowDeposits] = useState(false)
   const [showInfoTiers, setShowInfoTiers] = useState(false)
   const [showInfoLics, setShowInfoLics] = useState(false)
+  const [showBuyWLD, setShowBuyWLD] = useState(false)
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [platformStats, setPlatformStats] = useState({totalLocked:'—',totalUsers:'—'})
   const [depositAmt, setDepositAmt] = useState('')
@@ -1246,21 +1247,11 @@ export default function HachiMiner() {
             <br/><br/>
             <strong>Tu licencia te convierte en minero:</strong> según tu nivel (Básica/Estándar/Premium/Elite), tenés acceso a distintos mineros más avanzados dentro de la app — Drachma Miner y WLD Miner — cada uno con un tope de inversión que crece con tu nivel.
             <br/><br/>
-            <strong>Límite de licencias Elite:</strong> podés tener como máximo <strong>3 licencias Elite activas al mismo tiempo</strong>, como medida de seguridad para proteger el sistema.
-            <br/><br/>
             <strong>Sistema limitado y sostenible:</strong> todos los topes de inversión están pensados según tu nivel, para que el sistema crezca de forma controlada. El equipo de Hachi reinvierte parte de lo recaudado y distribuye recursos entre los distintos pools para mantener todo funcionando.
           </div>}
-          <div style={sLabel}>Comprar licencia WLD</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
-            {wldNames.map((n,i)=><div key={i} onClick={()=>setSelWLD(i)} style={{...lCard,border:`1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`,background:selWLD===i?'rgba(251,191,36,.08)':'#1e0840',boxShadow:selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none'}}>
-              <div style={{fontSize:11,fontWeight:700}}>{n}{i===3&&<span style={{color:'#34d399'}}> +5%</span>}</div>
-              <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([1,3,5,10][i]*wldHachi*(i===3?1.35:1.3)))}</div>
-              <div style={{fontSize:10,color:'#8b949e'}}>HACHI · 3 meses · {i===3?'35%':'30%'}</div>
-              <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{wldPrices[i]}</div>
-            </div>)}
+          <div style={{background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#fbbf24',textAlign:'center',fontWeight:700}}>
+            🔒 Máximo 3 licencias Elite activas al mismo tiempo, por usuario
           </div>
-          <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
-          <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI||licsAvailNum<=0} style={{...btnP,opacity:(!connected||wldHachi>MAX_HACHI||licsAvailNum<=0)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':licsAvailNum<=0?'Sin stock disponible':`Comprar · ${wldPrices[selWLD]}`}</button>
           <div style={sLabel}>Mis licencias WLD</div>
           {!wldLicsLoaded?<div style={empty}><div style={{fontSize:28}}>⏳</div><div>Consultando tus licencias...</div></div>:wldLics.length===0?<div style={empty}><div style={{fontSize:28}}>💠</div><div>{t('no_lics')}</div></div>:<div style={card}>
             {wldLics.map(({id,l,pend})=><div key={id.toString()} style={{borderBottom:'1px solid #3b0764',paddingBottom:10,marginBottom:10}}>
@@ -1270,6 +1261,32 @@ export default function HachiMiner() {
             </div>)}
             <button onClick={claimAllWLD} style={{...btnG,width:'100%',marginTop:4}}>Cobrar todo</button>
           </div>}
+          <button onClick={()=>setShowBuyWLD(true)} style={{...btnP,width:'100%',marginTop:12}}>🛒 Comprá tu licencia</button>
+        </div>}
+        {showBuyWLD&&<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'#0f0224',zIndex:200,overflowY:'auto',padding:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <span style={{...sLabel,margin:0}}>Comprar licencia WLD</span>
+            <button onClick={()=>setShowBuyWLD(false)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#e6edf3',fontSize:13,padding:'6px 12px',cursor:'pointer'}}>✕ Cerrar</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+            {wldNames.map((n,i)=>{
+              const now_ts = Math.floor(Date.now()/1000)
+              const activeEliteCount = wldLics.filter(({l}:any) => Number(l[1])===3 && l[10] && Number(l[7])>now_ts).length
+              const locked = i===3 && activeEliteCount>=3
+              return <div key={i} onClick={()=>{if(!locked) setSelWLD(i)}} style={{...lCard,border:`1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`,background:selWLD===i?'rgba(251,191,36,.08)':'#1e0840',boxShadow:selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none',opacity:locked?0.35:1,cursor:locked?'not-allowed':'pointer'}}>
+              <div style={{fontSize:11,fontWeight:700}}>{n}{i===3&&<span style={{color:'#34d399'}}> +5%</span>}</div>
+              <div style={{fontFamily:'monospace',fontSize:18,fontWeight:700,color:'#34d399'}}>{fmt(Math.round([1,3,5,10][i]*wldHachi*(i===3?1.35:1.3)))}</div>
+              <div style={{fontSize:10,color:'#8b949e'}}>HACHI · 3 meses · {i===3?'35%':'30%'}</div>
+              <div style={{fontSize:12,fontWeight:700,color:'#fbbf24',marginTop:6}}>{locked?'Ya tenés 3 activas':wldPrices[i]}</div>
+            </div>})}
+          </div>
+          <div style={pBox}>{[['Tipo',wldNames[selWLD]],['Precio',wldPrices[selWLD]],['HACHI base',wldPrev.base],[selWLD===3?'Total ×1.35 (Elite +5%)':'Total ×1.3',wldPrev.total],['HACHI/día',wldPrev.daily],['Mensual',wldPrev.monthly]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
+          {(()=>{
+            const now_ts = Math.floor(Date.now()/1000)
+            const activeEliteCount = wldLics.filter(({l}:any) => Number(l[1])===3 && l[10] && Number(l[7])>now_ts).length
+            const eliteLocked = selWLD===3 && activeEliteCount>=3
+            return <button onClick={buyWLD} disabled={!connected||wldHachi>MAX_HACHI||licsAvailNum<=0||eliteLocked} style={{...btnP,width:'100%',opacity:(!connected||wldHachi>MAX_HACHI||licsAvailNum<=0||eliteLocked)?0.4:1}}>{wldHachi>MAX_HACHI?'⚠ Ventas pausadas':licsAvailNum<=0?'Sin stock disponible':eliteLocked?'Ya tenés 3 Elite activas (máximo)':`Comprar · ${wldPrices[selWLD]}`}</button>
+          })()}
         </div>}
 
         {tab==='bocado'&&<div>
