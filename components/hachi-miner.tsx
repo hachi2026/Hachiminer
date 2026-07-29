@@ -310,6 +310,7 @@ export default function HachiMiner() {
   const [exchangingVip, setExchangingVip] = useState(false)
   const [showDeposits, setShowDeposits] = useState(false)
   const [showInfoTiers, setShowInfoTiers] = useState(false)
+  const [showInfoLics, setShowInfoLics] = useState(false)
   const [lockBatches, setLockBatches] = useState<any[]>([])
   const [platformStats, setPlatformStats] = useState({totalLocked:'—',totalUsers:'—'})
   const [depositAmt, setDepositAmt] = useState('')
@@ -1237,6 +1238,18 @@ export default function HachiMiner() {
 
         {tab==='lics'&&<div>
           <div style={{...sLabel,display:'flex',alignItems:'center',gap:10}}><img src="/hachi-logo.png" alt="" width={44} height={44} style={{borderRadius:10,flexShrink:0,objectFit:'cover'}} />Hachi Miner</div>
+          <button onClick={()=>setShowInfoLics(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'6px 12px',cursor:'pointer',marginBottom:10,width:'100%'}}>ℹ️ ¿Cómo funcionan las licencias?</button>
+          {showInfoLics&&<div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
+            <strong>¿Quién puede participar?</strong> Cualquier usuario verificado con World ID. Comprar tu primera licencia WLD es el punto de entrada a todo el sistema de minería de Hachi.
+            <br/><br/>
+            <strong>Licencias WLD:</strong> pagás WLD una vez y recibís HACHI de forma lineal durante 3 meses (30% de retorno total, 35% en Elite). Podés tener hasta <strong>5 licencias WLD nuevas por mes</strong>.
+            <br/><br/>
+            <strong>Tu licencia te convierte en minero:</strong> según tu nivel (Básica/Estándar/Premium/Elite), tenés acceso a distintos mineros más avanzados dentro de la app — Drachma Miner y WLD Miner — cada uno con un tope de inversión que crece con tu nivel.
+            <br/><br/>
+            <strong>Límite de licencias Elite:</strong> podés tener como máximo <strong>3 licencias Elite activas al mismo tiempo</strong>, como medida de seguridad para proteger el sistema.
+            <br/><br/>
+            <strong>Sistema limitado y sostenible:</strong> todos los topes de inversión están pensados según tu nivel, para que el sistema crezca de forma controlada. El equipo de Hachi reinvierte parte de lo recaudado y distribuye recursos entre los distintos pools para mantener todo funcionando.
+          </div>}
           <div style={sLabel}>Comprar licencia WLD</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
             {wldNames.map((n,i)=><div key={i} onClick={()=>setSelWLD(i)} style={{...lCard,border:`1px solid ${selWLD===i?'#fbbf24':'#5b21b6'}`,background:selWLD===i?'rgba(251,191,36,.08)':'#1e0840',boxShadow:selWLD===i?'0 0 12px rgba(251,191,36,.3)':'none'}}>
