@@ -88,7 +88,8 @@ const VIP_HOLDERS_ABI = [
   'function sushiPool() view returns (uint256)',
 ]
 
-const WLD_MINER_ADDR = '0x35C82EC1C5414b228eF39b65fAC545409fc92d75'
+const WLD_MINER_ADDR_OLD = '0x35C82EC1C5414b228eF39b65fAC545409fc92d75'
+const WLD_MINER_ADDR_NEW = '0x2C191913eBdA9b2bb61E3d00Ca5d35b6991F4B9A'
 const WLD_MINER_ABI = [
   'function getUserTier(address) view returns (uint8)',
   'function maxInvestableWld(address) view returns (uint256)',
@@ -291,7 +292,7 @@ export default function HachiMiner() {
   const [drachmaMiner, setDrachmaMiner] = useState({tier:255, amounts:[0,0,0,0], costs:[0,0,0,0], activeMineId:0, active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0, poolFree:0, durationDays:15, loaded:false})
   const [selDrachmaTier, setSelDrachmaTier] = useState(0)
   const [showInfoDrachma, setShowInfoDrachma] = useState(false)
-  const [wldMiner, setWldMiner] = useState({tier:255, cap:0, activeMineId:0, active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0, poolFreeHachi:0, poolFreeDrachma:0, loaded:false})
+  const [wldMiner, setWldMiner] = useState({tier:255, cap:0, activeMineId:0, active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0, poolFreeHachi:0, poolFreeDrachma:0, loaded:false, contractAddr:'0x2C191913eBdA9b2bb61E3d00Ca5d35b6991F4B9A', isNewContract:true})
   const [wldMinerVariants, setWldMinerVariants] = useState([{days:7,pct:10},{days:15,pct:15},{days:30,pct:30}])
   const [selWldAmount, setSelWldAmount] = useState('')
   const [selWldVariant, setSelWldVariant] = useState(0)
@@ -910,15 +911,53 @@ export default function HachiMiner() {
   const loadWldMiner = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
       await withRetry(async () => {
-        const wm = new ethers.Contract(WLD_MINER_ADDR, WLD_MINER_ABI, p)
+        const wmOld = new ethers.Contract(WLD_MINER_ADDR_OLD, WLD_MINER_ABI, p)
+
+        const oldActiveId = await wmOld.activeMineId(a)
+        let useOld = false
+        let oldMineInfo: any = null
+        if (Number(oldActiveId) > 0) {
+          const [m, pending] = await Promise.all([wmOld.mines(oldActiveId), wmOld.pendingRewards(oldActiveId)])
+          const activeFlag = m[10]
+          const hachiTotal = fe(m[3]), hachiClaimed = fe(m[4])
+          const drachmaTotal = fe(m[5]), drachmaClaimed = fe(m[6])
+          const restanteHachi = hachiTotal - hachiClaimed
+          const restanteDrachma = drachmaTotal - drachmaClaimed
+          const nowSecs = Math.floor(Date.now()/1000)
+          const endTimeOld = Number(m[8])
+          if (activeFlag && (nowSecs < endTimeOld || restanteHachi > 0.01 || restanteDrachma > 0.01)) {
+            useOld = true
+            oldMineInfo = {
+              active: activeFlag, variant: Number(m[1]),
+              hachiTotal, hachiClaimed, drachmaTotal, drachmaClaimed,
+              pendingHachi: fe(pending[0]), pendingDrachma: fe(pending[1]),
+              endTime: endTimeOld,
+            }
+          }
+        }
+
+        // Si NUNCA minó en el viejo (activeMineId=0), chequear si el viejo tiene pool suficiente.
+        // Si ya minó ahí alguna vez (aunque solo le quede polvo), el contrato viejo lo va a
+        // rechazar para siempre por su propio chequeo interno de "1 mina activa" — así que
+        // en ese caso SIEMPRE usamos el nuevo, sin importar el pool del viejo.
+        if (!useOld && Number(oldActiveId) === 0) {
+          const [oldHPool, oldHCommitted, oldDPool, oldDCommitted]: [bigint, bigint, bigint, bigint] = await Promise.all([
+            wmOld.hachiPool(), wmOld.hachiCommitted(), wmOld.drachmaPool(), wmOld.drachmaCommitted(),
+          ])
+          useOld = fe(oldHPool - oldHCommitted) > 1000 && fe(oldDPool - oldDCommitted) > 10
+        }
+
+        const wmAddr = useOld ? WLD_MINER_ADDR_OLD : WLD_MINER_ADDR_NEW
+        const wm = useOld ? wmOld : new ethers.Contract(WLD_MINER_ADDR_NEW, WLD_MINER_ABI, p)
+
         const variantsData = await Promise.all([0,1,2].map(i => wm.variants(i)))
         setWldMinerVariants(variantsData.map((v: any) => ({ days: Math.round(Number(v[0])/86400), pct: Number(v[1])/100 })))
         const [tier, cap, activeId, hPool, hCommitted, dPool, dCommitted] = await Promise.all([
           wm.getUserTier(a), wm.maxInvestableWld(a), wm.activeMineId(a),
           wm.hachiPool(), wm.hachiCommitted(), wm.drachmaPool(), wm.drachmaCommitted(),
         ])
-        let mineInfo = {active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0}
-        if (Number(activeId) > 0) {
+        let mineInfo = oldMineInfo || {active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0}
+        if (!oldMineInfo && Number(activeId) > 0) {
           const [m, pending] = await Promise.all([wm.mines(activeId), wm.pendingRewards(activeId)])
           mineInfo = {
             active: m[10], variant: Number(m[1]),
@@ -931,9 +970,11 @@ export default function HachiMiner() {
         const hFree: bigint = (hPool as bigint) - (hCommitted as bigint)
         const dFree: bigint = (dPool as bigint) - (dCommitted as bigint)
         setWldMiner({
-          tier: Number(tier), cap: fe(cap), activeMineId: Number(activeId),
+          tier: Number(tier), cap: fe(cap), activeMineId: useOld ? Number(oldActiveId) : Number(activeId),
           poolFreeHachi: fe(hFree), poolFreeDrachma: fe(dFree),
           loaded: true,
+          contractAddr: wmAddr,
+          isNewContract: !useOld,
           ...mineInfo,
         })
       })
@@ -944,7 +985,7 @@ export default function HachiMiner() {
     const wldAmount = parseFloat(selWldAmount)
     if (!wldAmount || wldAmount <= 0) { setWldMinerPreview({hachi:0, drachma:0}); return }
     try {
-      const wm = new ethers.Contract(WLD_MINER_ADDR, WLD_MINER_ABI, rpc())
+      const wm = new ethers.Contract(wldMiner.contractAddr, WLD_MINER_ABI, rpc())
       const [hachiTotal, drachmaTotal] = await wm.previewMine(pe(wldAmount), selWldVariant)
       setWldMinerPreview({hachi: fe(hachiTotal), drachma: fe(drachmaTotal)})
     } catch(e) { setWldMinerPreview({hachi:0, drachma:0}) }
@@ -957,14 +998,14 @@ export default function HachiMiner() {
     setMiningWld(true)
     try {
       toast_('Minando...', '#d29922')
-      const wm = new ethers.Contract(WLD_MINER_ADDR, WLD_MINER_ABI, rpc())
+      const wm = new ethers.Contract(wldMiner.contractAddr, WLD_MINER_ABI, rpc())
       const wldWei = pe(wldAmount)
       const [hachiTotal, drachmaTotal] = await wm.previewMine(wldWei, selWldVariant)
       const minHachi = (hachiTotal * BigInt(98)) / BigInt(100)
       const minDrachma = (drachmaTotal * BigInt(98)) / BigInt(100)
       await sendTxMulti([
-        ...buildPermit2Approvals(C.wld, WLD_MINER_ADDR, wldWei),
-        { to: WLD_MINER_ADDR, abi: WLD_MINER_ABI, fnName: 'mineWld', args: [wldWei, selWldVariant, minHachi, minDrachma] },
+        ...buildPermit2Approvals(C.wld, wldMiner.contractAddr, wldWei),
+        { to: wldMiner.contractAddr, abi: WLD_MINER_ABI, fnName: 'mineWld', args: [wldWei, selWldVariant, minHachi, minDrachma] },
       ])
       toast_('✓ Minería iniciada', '#3fb950')
       setSelWldAmount('')
@@ -977,7 +1018,7 @@ export default function HachiMiner() {
     setClaimingWldMiner(true)
     try {
       toast_('Reclamando...', '#d29922')
-      await sendTx(WLD_MINER_ADDR, WLD_MINER_ABI, 'claimRewards', [wldMiner.activeMineId])
+      await sendTx(wldMiner.contractAddr, WLD_MINER_ABI, 'claimRewards', [wldMiner.activeMineId])
       toast_('✓ Reclamado', '#3fb950')
       loadWldMiner(addr, rpc())
       loadBal(addr, rpc())
