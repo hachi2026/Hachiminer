@@ -61,7 +61,8 @@ function secondsUntilNextVoting(): number {
   return Math.floor(diff)
 }
 
-const DRACHMA_MINER_ADDR = '0x19d23871C64F29e22F31AcC094A255e5B1aAD577'
+const DRACHMA_MINER_ADDR_OLD = '0x19d23871C64F29e22F31AcC094A255e5B1aAD577'
+const DRACHMA_MINER_ADDR_NEW = '0xF34a0C6F3C55Bb3b8E489E0c66779331FFc72eA4'
 const DRACHMA_MINER_ABI = [
   'function getUserTier(address) view returns (uint8)',
   'function costInHachi(uint8) view returns (uint256)',
@@ -289,7 +290,7 @@ export default function HachiMiner() {
   const [basicBoughtToday, setBasicBoughtToday] = useState(0)
   const [hachiRaw, setHachiRaw] = useState(0)
   const [weeklyBonus, setWeeklyBonus] = useState({dailyRate:0, pending:0, everClaimed:false, secondsUntilNext:0})
-  const [drachmaMiner, setDrachmaMiner] = useState({tier:255, amounts:[0,0,0,0], costs:[0,0,0,0], activeMineId:0, active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0, poolFree:0, durationDays:15, loaded:false})
+  const [drachmaMiner, setDrachmaMiner] = useState({tier:255, amounts:[0,0,0,0], costs:[0,0,0,0], activeMineId:0, active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0, poolFree:0, durationDays:15, loaded:false, contractAddr:'0xF34a0C6F3C55Bb3b8E489E0c66779331FFc72eA4', isNewContract:true})
   const [selDrachmaTier, setSelDrachmaTier] = useState(0)
   const [showInfoDrachma, setShowInfoDrachma] = useState(false)
   const [wldMiner, setWldMiner] = useState({tier:255, cap:0, activeMineId:0, active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0, poolFreeHachi:0, poolFreeDrachma:0, loaded:false, contractAddr:'0x2C191913eBdA9b2bb61E3d00Ca5d35b6991F4B9A', isNewContract:true})
@@ -814,13 +815,42 @@ export default function HachiMiner() {
   const loadDrachmaMiner = async (a: string, p: ethers.JsonRpcProvider) => {
     try {
       await withRetry(async () => {
-        const dm = new ethers.Contract(DRACHMA_MINER_ADDR, DRACHMA_MINER_ABI, p)
+        const dmOld = new ethers.Contract(DRACHMA_MINER_ADDR_OLD, DRACHMA_MINER_ABI, p)
+
+        const oldActiveId = await dmOld.activeMineId(a)
+        let useOld = false
+        let oldMineInfo: any = null
+        if (Number(oldActiveId) > 0) {
+          const [m, pending] = await Promise.all([dmOld.mines(oldActiveId), dmOld.pendingDrachma(oldActiveId)])
+          const activeFlag = m[9]
+          const drachmaTotal = fe(m[3]), drachmaClaimed = fe(m[4])
+          const restante = drachmaTotal - drachmaClaimed
+          const nowSecs = Math.floor(Date.now()/1000)
+          const endTimeOld = Number(m[7])
+          if (activeFlag && (nowSecs < endTimeOld || restante > 0.01)) {
+            useOld = true
+            oldMineInfo = {active: activeFlag, drachmaTotal, drachmaClaimed, pending: fe(pending), endTime: endTimeOld}
+          }
+        }
+
+        // Si NUNCA minó en el viejo (activeMineId=0), chequear si el viejo tiene pool suficiente.
+        // Si ya minó ahí alguna vez (aunque solo le quede polvo), el contrato viejo lo va a
+        // rechazar para siempre por su propio chequeo interno de "1 mina activa" — así que
+        // en ese caso SIEMPRE usamos el nuevo, sin importar el pool del viejo.
+        if (!useOld && Number(oldActiveId) === 0) {
+          const [oldPool, oldCommitted]: [bigint, bigint] = await Promise.all([dmOld.drachmaPool(), dmOld.drachmaCommitted()])
+          useOld = fe(oldPool - oldCommitted) > 500
+        }
+
+        const dmAddr = useOld ? DRACHMA_MINER_ADDR_OLD : DRACHMA_MINER_ADDR_NEW
+        const dm = useOld ? dmOld : new ethers.Contract(DRACHMA_MINER_ADDR_NEW, DRACHMA_MINER_ABI, p)
+
         const [tier, activeId, durationSecs] = await Promise.all([dm.getUserTier(a), dm.activeMineId(a), dm.mineDuration()])
         const amounts = await Promise.all([0,1,2,3].map(i => dm.tierDrachmaAmounts(i)))
         const costs = await Promise.all([0,1,2,3].map(i => dm.costInHachi(i).catch(() => BigInt(0))))
 
-        let mineInfo = {active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0}
-        if (Number(activeId) > 0) {
+        let mineInfo = oldMineInfo || {active:false, drachmaTotal:0, drachmaClaimed:0, pending:0, endTime:0}
+        if (!oldMineInfo && Number(activeId) > 0) {
           const [m, pending] = await Promise.all([dm.mines(activeId), dm.pendingDrachma(activeId)])
           mineInfo = {active: m[9], drachmaTotal: fe(m[3]), drachmaClaimed: fe(m[4]), pending: fe(pending), endTime: Number(m[7])}
         }
@@ -830,10 +860,12 @@ export default function HachiMiner() {
           tier: Number(tier),
           amounts: amounts.map(fe),
           costs: costs.map(fe),
-          activeMineId: Number(activeId),
+          activeMineId: useOld ? Number(oldActiveId) : Number(activeId),
           poolFree: fe(dPool - dCommitted),
           durationDays: Math.round(Number(durationSecs) / 86400),
           loaded: true,
+          contractAddr: dmAddr,
+          isNewContract: !useOld,
           ...mineInfo,
         })
       })
@@ -847,8 +879,8 @@ export default function HachiMiner() {
       const costWithSlippage = drachmaMiner.costs[selDrachmaTier] * 1.02
       const costWei = pe(costWithSlippage)
       await sendTxMulti([
-        ...buildPermit2Approvals(C.hachi, DRACHMA_MINER_ADDR, costWei),
-        { to: DRACHMA_MINER_ADDR, abi: DRACHMA_MINER_ABI, fnName: 'mineDrachma', args: [selDrachmaTier, costWei] },
+        ...buildPermit2Approvals(C.hachi, drachmaMiner.contractAddr, costWei),
+        { to: drachmaMiner.contractAddr, abi: DRACHMA_MINER_ABI, fnName: 'mineDrachma', args: [selDrachmaTier, costWei] },
       ])
       toast_(`✓ Drachma en generación (${drachmaMiner.durationDays} días)`, '#3fb950')
       loadDrachmaMiner(addr, rpc())
@@ -860,7 +892,7 @@ export default function HachiMiner() {
   const claimDrachmaMineAction = async () => {
     try {
       toast_('Reclamando Drachma...', '#d29922')
-      await sendTx(DRACHMA_MINER_ADDR, DRACHMA_MINER_ABI, 'claimDrachma', [drachmaMiner.activeMineId])
+      await sendTx(drachmaMiner.contractAddr, DRACHMA_MINER_ABI, 'claimDrachma', [drachmaMiner.activeMineId])
       toast_('✓ Drachma reclamado', '#3fb950')
       loadDrachmaMiner(addr, rpc())
       loadBal(addr, rpc())
