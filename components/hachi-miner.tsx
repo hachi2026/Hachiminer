@@ -1578,7 +1578,9 @@ export default function HachiMiner() {
               </div>
             })()}
             <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
-              🎁 <strong>5,000 SUSHI + 2,000 Drachma</strong> a repartir entre todos los participantes (sin sorteo). Solo tenés que compartir la captura de tu voto en el grupo DEX de la comunidad (WhatsApp o Telegram, abajo).
+              🎁 <strong>10,000 SUSHI</strong> a repartir entre quienes voten por el Partido Hachi, y <strong>5,000 SUSHI</strong> entre quienes reaccionen a HACHI en DexScreener.
+              <br/><br/>
+              ⚠️ Solo se acepta el <strong>link</strong> que te da la propia plataforma al tocar "Compartir" — es el único válido. Las capturas de pantalla <strong>no</strong> se aceptan. Mandanos tu link por WhatsApp para que quede registrado.
             </div>
             <div style={{fontSize:11,color:'#8b949e',marginBottom:12,lineHeight:1.6}}>
               La votación se abre todas las semanas, de <strong>jueves 20:00</strong> a <strong>domingo 19:59</strong> (hora de Chile / GMT-4).
