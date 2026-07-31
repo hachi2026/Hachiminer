@@ -1622,13 +1622,17 @@ export default function HachiMiner() {
                   </div>
                 })}
               </div>
-              <button onClick={mineDrachmaAction} disabled={!connected||drachmaMiner.active} style={{...btnP,opacity:(!connected||drachmaMiner.active)?0.4:1}}>{drachmaMiner.active?'Ya tenés una mina activa':`Minar · ${drachmaMiner.costs[selDrachmaTier].toFixed(4)} HACHI`}</button>
+              {(()=>{
+                const nowSecsDm = Math.floor(Date.now()/1000)
+                const drachmaReallyActive = drachmaMiner.active && (nowSecsDm < drachmaMiner.endTime || drachmaMiner.pending > 0.01)
+                return <button onClick={mineDrachmaAction} disabled={!connected||drachmaReallyActive} style={{...btnP,opacity:(!connected||drachmaReallyActive)?0.4:1}}>{drachmaReallyActive?'Ya tenés una mina activa':`Minar · ${drachmaMiner.costs[selDrachmaTier].toFixed(4)} HACHI`}</button>
+              })()}
             </div>
-            {drachmaMiner.active&&<div style={{...card,marginTop:12}}>
+            {drachmaMiner.active&&(Math.floor(Date.now()/1000)<drachmaMiner.endTime||drachmaMiner.pending>0.01)&&<div style={{...card,marginTop:12}}>
               <div style={cTitle}>Tu minería activa</div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Total</span><span style={{fontFamily:'monospace'}}>{drachmaMiner.drachmaTotal.toFixed(2)} Drachma</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Ya reclamado</span><span style={{fontFamily:'monospace'}}>{drachmaMiner.drachmaClaimed.toFixed(2)} Drachma</span></div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente ahora</span><span style={{fontFamily:'monospace',color:'#3fb950'}}>{drachmaMiner.pending.toFixed(4)} Drachma</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente ahora</span><span style={{fontFamily:'monospace',color:'#3fb950'}}>{drachmaMiner.pending.toFixed(2)} Drachma</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Termina</span><span style={{fontFamily:'monospace'}}>{new Date(drachmaMiner.endTime*1000).toLocaleDateString()}</span></div>
               <button onClick={claimDrachmaMineAction} disabled={drachmaMiner.pending<=0} style={{...btnG,marginTop:8,opacity:drachmaMiner.pending>0?1:0.4}}>Reclamar Drachma</button>
             </div>}
