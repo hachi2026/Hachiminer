@@ -1551,14 +1551,18 @@ export default function HachiMiner() {
                 <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Recibirías (HACHI)</span><span style={{fontFamily:'monospace',color:'#3fb950'}}>{wldMinerPreview.hachi.toFixed(4)}</span></div>
                 <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Recibirías (Drachma)</span><span style={{fontFamily:'monospace',color:'#60a5fa'}}>{wldMinerPreview.drachma.toFixed(4)}</span></div>
               </div>}
-              <button onClick={mineWldAction} disabled={!connected||miningWld||wldMiner.active} style={{...btnP,opacity:(!connected||miningWld||wldMiner.active)?0.4:1}}>{wldMiner.active?'Ya tenés una minería activa':miningWld?'Minando...':'Minar'}</button>
+              {(()=>{
+                const nowSecsWld = Math.floor(Date.now()/1000)
+                const wldReallyActive = wldMiner.active && (nowSecsWld < wldMiner.endTime || wldMiner.pendingHachi > 0.01 || wldMiner.pendingDrachma > 0.01)
+                return <button onClick={mineWldAction} disabled={!connected||miningWld||wldReallyActive} style={{...btnP,opacity:(!connected||miningWld||wldReallyActive)?0.4:1}}>{wldReallyActive?'Ya tenés una minería activa':miningWld?'Minando...':'Minar'}</button>
+              })()}
             </div>
-            {wldMiner.active&&<div style={{...card,marginTop:12}}>
+            {wldMiner.active&&(Math.floor(Date.now()/1000)<wldMiner.endTime||wldMiner.pendingHachi>0.01||wldMiner.pendingDrachma>0.01)&&<div style={{...card,marginTop:12}}>
               <div style={cTitle}>Tu minería activa</div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI total / reclamado</span><span style={{fontFamily:'monospace'}}>{wldMiner.hachiTotal.toFixed(4)} / {wldMiner.hachiClaimed.toFixed(4)}</span></div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Drachma total / reclamado</span><span style={{fontFamily:'monospace'}}>{wldMiner.drachmaTotal.toFixed(4)} / {wldMiner.drachmaClaimed.toFixed(4)}</span></div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente HACHI</span><span style={{fontFamily:'monospace',color:'#3fb950'}}>{wldMiner.pendingHachi.toFixed(4)}</span></div>
-              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente Drachma</span><span style={{fontFamily:'monospace',color:'#60a5fa'}}>{wldMiner.pendingDrachma.toFixed(4)}</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>HACHI total / reclamado</span><span style={{fontFamily:'monospace'}}>{wldMiner.hachiTotal.toFixed(2)} / {wldMiner.hachiClaimed.toFixed(2)}</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Drachma total / reclamado</span><span style={{fontFamily:'monospace'}}>{wldMiner.drachmaTotal.toFixed(2)} / {wldMiner.drachmaClaimed.toFixed(2)}</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente HACHI</span><span style={{fontFamily:'monospace',color:'#3fb950'}}>{wldMiner.pendingHachi.toFixed(2)}</span></div>
+              <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Pendiente Drachma</span><span style={{fontFamily:'monospace',color:'#60a5fa'}}>{wldMiner.pendingDrachma.toFixed(2)}</span></div>
               <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Termina</span><span style={{fontFamily:'monospace'}}>{new Date(wldMiner.endTime*1000).toLocaleDateString()}</span></div>
               <button onClick={claimWldMinerAction} disabled={claimingWldMiner||(wldMiner.pendingHachi<=0&&wldMiner.pendingDrachma<=0)} style={{...btnG,marginTop:8,opacity:(wldMiner.pendingHachi>0||wldMiner.pendingDrachma>0)?1:0.4}}>{claimingWldMiner?'Reclamando...':'Reclamar'}</button>
             </div>}
