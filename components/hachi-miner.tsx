@@ -1459,17 +1459,17 @@ export default function HachiMiner() {
             </div>
             <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
             {(()=>{
-              const maxBasicNow = wldTierActive===255?0:1
+              const maxBasicNow = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
               const dailyLimitHit = selSUSHI===0 && basicBoughtToday >= maxBasicNow
               const label = dailyLimitHit ? '🚫 Límite diario alcanzado, volvé mañana' : `Comprar · ${sushiPrices[selSUSHI]}`
               return <button onClick={buySUSHI} disabled={dailyLimitHit} style={{...btnG, opacity: dailyLimitHit?0.5:1, cursor: dailyLimitHit?'not-allowed':'pointer'}}>{label}</button>
             })()}
             {(()=>{
-              const maxBasic = wldTierActive===255?0:1
+              const maxBasic = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
               const limitReached = basicBoughtToday >= maxBasic
               return (
                 <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginTop:12,fontSize:12,textAlign:'center',fontWeight:700,color:limitReached?'#f87171':'#8b949e'}}>
-                  {limitReached ? '🚫 Límite alcanzado — 1 Bocado cada 24 horas' : '1 Bocado cada 24 horas'}
+                  {limitReached ? `🚫 Límite alcanzado — ${basicBoughtToday}/${maxBasic} Bocados cada 24 horas` : `${basicBoughtToday}/${maxBasic} Bocados disponibles hoy`}
                 </div>
               )
             })()}
