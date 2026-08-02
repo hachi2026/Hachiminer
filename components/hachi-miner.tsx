@@ -171,7 +171,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -762,6 +762,7 @@ export default function HachiMiner() {
     if (v==='pools') loadPools(p)
     if (v==='wldminer') { loadWldMiner(addr, p); loadWldMinerHistory(addr, p) }
     if (v==='drachmaminer') { loadDrachmaMiner(addr, p); loadDrachmaMinerHistory(addr, p) }
+    if (v==='centrohachi') { loadWLDLics(p); loadWldMiner(addr, p); loadLock(p); loadVipHolders(addr, p); loadWeeklyBonus(addr, p) }
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -1340,7 +1341,8 @@ export default function HachiMiner() {
           {priceAlert&&<div style={{background:'rgba(248,113,113,.1)',border:'1px solid rgba(248,113,113,.4)',borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:'#f87171',textAlign:'center'}}>⚠ Ventas WLD pausadas — HACHI devaluado ({fmt(wldHachi)} &gt; {MAX_HACHI.toLocaleString()})</div>}
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:14}}>
             {[
-              {icon:'⛏️',label:'Minería',tab:'mineria' as Tab,delay:0,isNew:true},
+              {icon:'🎯',label:'Centro Hachi',tab:'centrohachi' as Tab,delay:0,isNew:true},
+              {icon:'⛏️',label:'Minería',tab:'mineria' as Tab,delay:0.15},
               {icon:'🔒',label:'Lock',tab:'lock' as Tab,delay:0.3},
               {icon:'🌊',label:'Pools',tab:'pools' as Tab,delay:0.6},
               {icon:'🗳️',label:'Votación',tab:'voting' as Tab,delay:1.2},
@@ -1492,6 +1494,48 @@ export default function HachiMiner() {
             </button>)}
           </div>
         </div>}
+
+          {tab==='centrohachi'&&<div>
+            <div style={sLabel}>🎯 Centro Hachi</div>
+            <div style={{fontSize:11,color:'#8b949e',textAlign:'center',marginBottom:12,lineHeight:1.5}}>
+              Todo lo que tenés disponible para reclamar o usar, en un solo lugar.
+            </div>
+            {(()=>{
+              const wldLicsPendTotal = wldLics.reduce((acc:number,l:any)=>acc+Number(fe(l.pend||BigInt(0))),0)
+              const maxBasicCH = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
+              const bocadoDisponible = Math.max(0, maxBasicCH - basicBoughtToday)
+              const lockPendNum = parseFloat(lockData.pending) || 0
+              const fmtSecsCH = (s:number) => { const d=Math.floor(s/86400), h=Math.floor((s%86400)/3600); return d>0?`${d}d ${h}h`:`${h}h` }
+              const msUntilMidnightUTC = new Date().setUTCHours(24,0,0,0) - Date.now()
+              const bocadoResetIn = fmtSecsCH(Math.floor(msUntilMidnightUTC/1000))
+
+              const items = [
+                { key:'wldlics', iconImg:'/hachi-logo.png', label:'Hachi Miner (Licencias WLD)', valor: wldLicsPendTotal>0.01 ? `${wldLicsPendTotal.toFixed(2)} HACHI` : null, pendiente: 'Sin nada acumulado todavía', disponibleAhora:true, claimFn: claimAllWLD },
+                { key:'wldminer', icon:'⛏️', label:'WLD Miner', valor: (wldMiner.pendingHachi>0.01||wldMiner.pendingDrachma>0.01) ? `${wldMiner.pendingHachi.toFixed(2)} HACHI + ${wldMiner.pendingDrachma.toFixed(2)} Drachma` : null, pendiente: 'Sin nada acumulado todavía', disponibleAhora:true, claimFn: claimWldMinerAction },
+                { key:'lock', icon:'🔒', label:'Lock (APY)', valor: lockPendNum>0.01 ? `${lockData.pending} HACHI` : null, pendiente: lockData.nextClaimIn!=='—' ? `Disponible en ${lockData.nextClaimIn}` : 'Sin nada acumulado todavía', disponibleAhora: lockData.nextClaimIn==='—', claimFn: claimAPY },
+                { key:'bocado', iconImg:'/hachi-cat-savings.png', label:'Bocado disponible hoy', valor: bocadoDisponible>0 ? `${bocadoDisponible} disponible${bocadoDisponible>1?'s':''}` : null, pendiente: `Se resetea en ${bocadoResetIn}`, disponibleAhora:false, action:()=>loadTab('bocado') },
+                { key:'reinversion', icon:'💎', label:'Reinversión VIP', valor: vipData.pendingHachi>0.01 ? `${vipData.pendingHachi.toFixed(2)} HACHI acumulado` : null, pendiente: 'Sin nada acumulado todavía', disponibleAhora:true, action:()=>loadTab('lock') },
+                { key:'semanal', icon:'📅', label:'Bono Semanal', valor: weeklyBonus.pending>0.01 ? `${weeklyBonus.pending.toFixed(2)} SUSHI` : null, pendiente: weeklyBonus.secondsUntilNext>0 ? `Disponible en ${fmtSecsCH(weeklyBonus.secondsUntilNext)}` : 'Sin nada acumulado todavía', disponibleAhora: weeklyBonus.secondsUntilNext<=0, claimFn: claimWeeklyBonus },
+              ]
+
+              return <>
+                {items.map(i=>{
+                  const tieneAlgo = !!i.valor
+                  const colorEstado = tieneAlgo ? '#3fb950' : (i as any).disponibleAhora===false && i.pendiente!=='Sin nada acumulado todavía' ? '#fbbf24' : '#f87171'
+                  return <div key={i.key} style={{...card,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'16px 14px',marginBottom:12,gap:12}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12,flex:1,minWidth:0}}>
+                      {(i as any).iconImg ? <img src={(i as any).iconImg} alt="" width={28} height={28} style={{borderRadius:14,objectFit:'cover',flexShrink:0}} /> : <span style={{fontSize:28,flexShrink:0}}>{(i as any).icon}</span>}
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:13,color:'#8b949e',marginBottom:3}}>{i.label}</div>
+                        <div style={{fontSize:15,fontWeight:700,color:colorEstado}}>{i.valor || i.pendiente}</div>
+                      </div>
+                    </div>
+                    <button onClick={()=> (i as any).claimFn ? ((i as any).disponibleAhora && (i as any).claimFn()) : (i as any).action()} disabled={!(i as any).action && !((i as any).disponibleAhora)} style={{...btnP,padding:'6px 10px',fontSize:11,flexShrink:0,opacity:(!(i as any).action && !((i as any).disponibleAhora))?0.4:1,cursor:(!(i as any).action && !((i as any).disponibleAhora))?'not-allowed':'pointer'}}>{(i as any).claimFn?'Reclamar':'Ir'}</button>
+                  </div>
+                })}
+              </>
+            })()}
+          </div>}
 
         {tab==='lock'&&<div>
           <div style={card}><div style={cTitle}>Tu posición</div>
