@@ -1465,12 +1465,11 @@ export default function HachiMiner() {
               return <button onClick={buySUSHI} disabled={dailyLimitHit} style={{...btnG, opacity: dailyLimitHit?0.5:1, cursor: dailyLimitHit?'not-allowed':'pointer'}}>{label}</button>
             })()}
             {(()=>{
-              const tierLabel = !wldTierLoaded?'Consultando...':wldTierActive===255?'Sin licencia WLD':['Básica','Estándar','Premium','Elite'][wldTierActive]??'—'
-              const maxBasic  = wldTierActive===255?0:1
+              const maxBasic = wldTierActive===255?0:1
+              const limitReached = basicBoughtToday >= maxBasic
               return (
-                <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginTop:12,fontSize:12}}>
-                  <div style={{...row,marginBottom:4}}><span style={{color:'#8b949e'}}>WLD activa</span><span style={{fontWeight:700,color:'#fbbf24'}}>{tierLabel}</span></div>
-                  <div style={row}><span style={{color:'#8b949e'}}>Bocados hoy</span><span style={{fontFamily:'monospace',fontWeight:600}}>{basicBoughtToday} / {maxBasic}</span></div>
+                <div style={{background:'rgba(124,58,237,.08)',border:'1px solid #5b21b6',borderRadius:8,padding:12,marginTop:12,fontSize:12,textAlign:'center',fontWeight:700,color:limitReached?'#f87171':'#8b949e'}}>
+                  {limitReached ? '🚫 Límite alcanzado — 1 Bocado cada 24 horas' : '1 Bocado cada 24 horas'}
                 </div>
               )
             })()}
