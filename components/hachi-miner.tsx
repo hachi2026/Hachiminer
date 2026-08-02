@@ -294,7 +294,7 @@ export default function HachiMiner() {
   const [selDrachmaTier, setSelDrachmaTier] = useState(0)
   const [showInfoDrachma, setShowInfoDrachma] = useState(false)
   const [wldMiner, setWldMiner] = useState({tier:255, cap:0, activeMineId:0, active:false, variant:0, hachiTotal:0, hachiClaimed:0, drachmaTotal:0, drachmaClaimed:0, pendingHachi:0, pendingDrachma:0, endTime:0, poolFreeHachi:0, poolFreeDrachma:0, loaded:false, contractAddr:'0x2C191913eBdA9b2bb61E3d00Ca5d35b6991F4B9A', isNewContract:true})
-  const [wldMinerVariants, setWldMinerVariants] = useState([{days:7,pct:10},{days:15,pct:15},{days:30,pct:30}])
+  const [wldMinerVariants, setWldMinerVariants] = useState([{days:30,pct:30},{days:15,pct:12},{days:7,pct:5}])
   const [selWldAmount, setSelWldAmount] = useState('')
   const [selWldVariant, setSelWldVariant] = useState(0)
   const [wldMinerPreview, setWldMinerPreview] = useState({hachi:0, drachma:0})
