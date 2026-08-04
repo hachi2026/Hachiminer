@@ -303,6 +303,7 @@ export default function HachiMiner() {
   const [claimingWldMiner, setClaimingWldMiner] = useState(false)
   const [claimingWeekly, setClaimingWeekly] = useState(false)
   const [showInfoWeekly, setShowInfoWeekly] = useState(false)
+  const [giftOpened, setGiftOpened] = useState(false)
   const [wldRaw, setWldRaw]     = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
@@ -1352,25 +1353,45 @@ export default function HachiMiner() {
               <span style={{fontSize:10,fontWeight:600}}>{btn.label}</span>
             </button>)}
           </div>
-          <div style={card}><div style={cTitle}>HACHI</div>
-            <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
-              <img src="/hachi-cat-savings.png" alt="Hachi el gato ahorrando monedas HACHI" width={88} height={88} style={{borderRadius:14,flexShrink:0,objectFit:'cover',boxShadow:'0 0 18px rgba(124,58,237,.35)'}} />
-              <div style={{flex:1}}>
-                <div style={{fontSize:16,fontWeight:700,color:'#e6edf3'}}>💰 Bono Semanal</div>
-                <div style={{fontSize:11,color:'#8b949e',marginTop:2}}>Según tus licencias WLD activas</div>
-              </div>
-            </div>
-            <button onClick={()=>setShowInfoWeekly(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'6px 12px',cursor:'pointer',marginBottom:10,width:'100%'}}>ℹ️ ¿Cómo funciona este bono?</button>
+          <div style={card}><div style={cTitle}>🎁 Reward</div>
+            <button onClick={()=>setShowInfoWeekly(v=>!v)} style={{background:'none',border:'1px solid #5b21b6',borderRadius:8,color:'#a78bfa',fontSize:12,padding:'6px 12px',cursor:'pointer',marginBottom:10,width:'100%'}}>ℹ️ ¿Qué es esto?</button>
             {showInfoWeekly&&<div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
-              Ganás <strong>100 SUSHI por día, por cada WLD que tengas invertido</strong> en tus licencias WLD activas. Por ejemplo, si tenés 10 WLD invertidos entre todas tus licencias, son 1,000 SUSHI/día de tasa.
+              Cada 7 días, si tenés licencias WLD o una minería de Drachma activa, se te va preparando un <strong>regalo sorpresa</strong> — un extra esporádico de agradecimiento, no algo garantizado por sistema.
               <br/><br/>
-              Se acumula hasta un tope de <strong>7 días</strong>. El primer reclamo ya paga de inmediato. Después, hay que esperar 7 días entre reclamos.
-              <br/><br/>
-              Ojo: una vez que corresponda reclamar, tenés <strong>3 días de gracia</strong> — si no reclamás en ese plazo, ese saldo se pierde y vuelve al pool.
+              No vas a ver el monto acumulándose — solo vas a saber que tenés un regalo esperando cuando esté listo para abrir. Una vez que lo abrís, tenés 3 días de gracia para reclamarlo antes de que vuelva al pool.
             </div>}
-            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Tu tasa diaria</span><span style={{fontFamily:'monospace',fontWeight:600,color:'#60a5fa'}}>{weeklyBonus.dailyRate.toFixed(2)} SUSHI/día</span></div>
-            <div style={row}><span style={{color:'#8b949e',fontSize:12}}>Disponible para reclamar</span><span style={{fontFamily:'monospace',fontWeight:700,color:'#3fb950'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</span></div>
-            <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0)} style={{...btnP,width:'100%',marginTop:8,opacity:(!connected||claimingWeekly||(weeklyBonus.everClaimed&&weeklyBonus.pending<=0))?0.4:1}}>{claimingWeekly?'Reclamando...':!weeklyBonus.everClaimed?'Activar y reclamar mi bono':weeklyBonus.pending>0?`Reclamar ${weeklyBonus.pending.toFixed(2)} SUSHI`:weeklyBonus.secondsUntilNext>0?`Disponible en ${Math.floor(weeklyBonus.secondsUntilNext/86400)}d ${Math.floor((weeklyBonus.secondsUntilNext%86400)/3600)}h`:'Todavía no disponible'}</button>
+            <div style={{textAlign:'center',padding:'24px 8px'}}>
+              {(()=>{
+                const listo = weeklyBonus.secondsUntilNext<=0 && weeklyBonus.pending>0
+                const bloqueado = !listo
+                if (bloqueado) {
+                  const d = Math.floor(weeklyBonus.secondsUntilNext/86400), h = Math.floor((weeklyBonus.secondsUntilNext%86400)/3600)
+                  return <>
+                    <div style={{fontSize:64,marginBottom:12,filter:'grayscale(0.4) opacity(0.6)'}}>🎁</div>
+                    <div style={{fontSize:14,color:'#8b949e',marginBottom:6}}>Tu próximo regalo se está preparando</div>
+                    {weeklyBonus.dailyRate<=0
+                      ? <div style={{fontSize:12,color:'#f87171',lineHeight:1.5}}>Necesitás una licencia WLD activa o una minería de Drachma activa para empezar a generar tu regalo.</div>
+                      : <div style={{fontSize:13,color:'#fbbf24',fontWeight:700}}>{weeklyBonus.everClaimed ? `Listo en ${d}d ${h}h` : 'Ya podés reclamar tu primer regalo'}</div>}
+                    {!weeklyBonus.everClaimed && weeklyBonus.dailyRate>0 && <button onClick={claimWeeklyBonus} disabled={!connected||claimingWeekly} style={{...btnP,width:'100%',marginTop:16,opacity:(!connected||claimingWeekly)?0.4:1}}>{claimingWeekly?'Abriendo...':'🎁 Abrir mi primer regalo'}</button>}
+                  </>
+                }
+                if (listo && !giftOpened) {
+                  return <>
+                    <div onClick={()=>setGiftOpened(true)} style={{fontSize:72,marginBottom:12,cursor:'pointer',animation:'giftBounceV1 1.2s ease-in-out infinite'}}>🎁</div>
+                    <div style={{fontSize:15,fontWeight:800,color:'#fbbf24',marginBottom:6}}>¡Tenés un regalo esperando!</div>
+                    <div style={{fontSize:12,color:'#8b949e'}}>Tocá el regalo para abrirlo</div>
+                    <style>{`@keyframes giftBounceV1 { 0%,100%{transform:translateY(0) rotate(-3deg);} 50%{transform:translateY(-10px) rotate(3deg);} }`}</style>
+                  </>
+                }
+                return <>
+                  <div style={{fontSize:56,marginBottom:12}}>🎉</div>
+                  <div style={{fontSize:16,fontWeight:800,color:'#3fb950',marginBottom:4}}>¡Felicidades!</div>
+                  <div style={{fontSize:14,color:'#e6edf3',marginBottom:16}}>Ganaste <strong style={{color:'#fbbf24'}}>{weeklyBonus.pending.toFixed(2)} SUSHI</strong></div>
+                  <button onClick={async()=>{await claimWeeklyBonus(); setGiftOpened(false)}} disabled={!connected||claimingWeekly} style={{...btnP,width:'100%',opacity:(!connected||claimingWeekly)?0.4:1}}>{claimingWeekly?'Reclamando...':'Reclamar'}</button>
+                  <div style={{fontSize:11,color:'#8b949e',marginTop:12}}>Gracias por usar Hachi Miner 🐱</div>
+                </>
+              })()}
+            </div>
           </div>
           <button onClick={()=>window.open(HACHI_BUY_URL,'_blank')} style={{...btnG,width:'100%',marginBottom:12}}>🪙 Comprar HACHI</button>
           {!connected&&<div style={{textAlign:'center',padding:'32px 16px',color:'#8b949e'}}>
