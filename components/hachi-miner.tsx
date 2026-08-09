@@ -1190,10 +1190,11 @@ export default function HachiMiner() {
   const core = new ethers.Contract(C.core,CORE,p)
   // Pool A (ciclos SUSHI). Pool C / perpetuo fue ELIMINADO del contrato (pago unico inmediato),
   // por eso ya no lo mostramos. getPoolStatus aun devuelve poolC=0 por compatibilidad, lo ignoramos.
-  let poolA='—',poolAC='—',poolAF='—',sushiAvail='—'
+  let poolA='—',poolAC='—',poolAF='—',sushiAvail='—',poolAFreeNum=0
   try {
     const ps=await core.getPoolStatus()
     poolA=fmt(fe(ps[0]))+' SUSHI'; poolAC=fmt(fe(ps[1]))+' SUSHI'; poolAF=fmt(fe(ps[2]))+' SUSHI'
+    poolAFreeNum=fe(ps[2])
     const sa=await core.getSushiAvailability()
     sushiAvail=sa[1].toString()
   } catch(e:any) { log('poolStatus err: '+(e.message||'').slice(0,40)) }
@@ -1207,7 +1208,7 @@ export default function HachiMiner() {
     const n = costPerLic>0 ? Math.floor(hf/costPerLic) : 0
     localLicsAvail = n > 0 ? n + ' lics. básicas' : '0 (sin fondos)'
   } catch(e) {}
-  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[2]))+' HACHI', wldFree:fmt(fe(ws[1]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail:localLicsAvail})
+  setPoolsData({wldTotal:fmt(fe(ws[0]))+' HACHI', wldComm:fmt(fe(ws[2]))+' HACHI', wldFree:fmt(fe(ws[1]))+' HACHI', wldPaid:fmt(fe(ws[3]))+' HACHI', poolA, poolAC, poolAF, poolAFreeNum, sushiAvail, wldSales:fmt(fe(st[0]))+' WLD', wldLics:st[2].toString(), sushiLics:st[3].toString(), burned:fmt(fe(st[4]))+' HACHI', licsAvail:localLicsAvail})
   } catch(e:any) { log('loadPools err: '+(e.message||'error').slice(0,50)) }
   }
 
@@ -1482,10 +1483,21 @@ export default function HachiMiner() {
             </div>
             <div style={pBox}>{[['Tipo',sushiNames[selSUSHI]],['Precio',sushiPrices[selSUSHI]],['SUSHI base',sushiPrev.base],['Bonus inmediato','+25%'],['Recibís al instante (×1.25)',sushiPrev.total]].map(([l,v])=><div key={l} style={row}><span style={{color:'#8b949e',fontSize:12}}>{l}</span><span style={{fontFamily:'monospace',fontSize:13}}>{v}</span></div>)}</div>
             {(()=>{
+              const poolEmpty = !(poolsData.poolAFreeNum > 0)
               const maxBasicNow = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
               const dailyLimitHit = selSUSHI===0 && basicBoughtToday >= maxBasicNow
-              const label = dailyLimitHit ? '🚫 Límite diario alcanzado, volvé mañana' : `Comprar · ${sushiPrices[selSUSHI]}`
-              return <button onClick={buySUSHI} disabled={dailyLimitHit} style={{...btnG, opacity: dailyLimitHit?0.5:1, cursor: dailyLimitHit?'not-allowed':'pointer'}}>{label}</button>
+              const disabled = poolEmpty || dailyLimitHit
+              const label = poolEmpty ? '⏳ En pausa por ahora' : dailyLimitHit ? '🚫 Límite diario alcanzado, volvé mañana' : `Comprar · ${sushiPrices[selSUSHI]}`
+              return <>
+                {poolEmpty && <div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.6}}>
+                  <strong>🐱 Bocado en pausa por ahora</strong>
+                  <br/><br/>
+                  La plataforma de SUSHI está teniendo problemas técnicos externos a nosotros — no es algo de nuestro contrato ni de la app. Ellos mismos informaron que ya están trabajando en solucionarlo.
+                  <br/><br/>
+                  Mientras tanto, ponemos Bocado en pausa para cuidar el sistema. Apenas se resuelva (o encontremos una alternativa mejor), lo reactivamos y avisamos acá mismo.
+                </div>}
+                <button onClick={buySUSHI} disabled={disabled} style={{...btnG, opacity: disabled?0.5:1, cursor: disabled?'not-allowed':'pointer'}}>{label}</button>
+              </>
             })()}
             {(()=>{
               const maxBasic = wldTierActive===255?0:wldTierActive===0?1:wldTierActive===1?2:wldTierActive===2?3:4
