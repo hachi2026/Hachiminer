@@ -75,6 +75,7 @@ const DRACHMA_MINER_ABI = [
   'function drachmaPool() view returns (uint256)',
   'function drachmaCommitted() view returns (uint256)',
   'function mineDuration() view returns (uint256)',
+  'function mineId() view returns (uint256)',
 ]
 
 const VIP_HOLDERS_ADDR = '0x75eD38D459c30656128dF6c9825edfB1A50623af'
@@ -105,6 +106,7 @@ const WLD_MINER_ABI = [
   'function hachiCommitted() view returns (uint256)',
   'function drachmaCommitted() view returns (uint256)',
   'function variants(uint256) view returns (uint256 duration, uint256 returnBps)',
+  'function mineId() view returns (uint256)',
 ]
 
 const SHOW_TOP_NAV = false // poner en true para volver a mostrar la barra de pestañas de arriba
@@ -126,6 +128,7 @@ const PERMIT2_ABI = [
 const ORACLE = ['function getRates() view returns (uint256,uint256,uint256,bool,bool,uint256)', 'function previewWldLicense(uint256) view returns (uint256,uint256,uint256,uint256,uint256)']
 const POOLWLD = ['function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256)']
 const CORE = [
+  'function wldLicId() view returns (uint256)',
   'function humanVerified(address) view returns (bool)',
   'function getUserWLDLics(address) view returns (uint256[])',
   'function getUserSushiLics(address) view returns (uint256[])',
@@ -171,7 +174,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'|'sorteo'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -304,6 +307,9 @@ export default function HachiMiner() {
   const [claimingWeekly, setClaimingWeekly] = useState(false)
   const [showInfoWeekly, setShowInfoWeekly] = useState(false)
   const [giftOpened, setGiftOpened] = useState(false)
+  const [raffleTotalTickets, setRaffleTotalTickets] = useState(0)
+  const [myRaffleNumbers, setMyRaffleNumbers] = useState<number[]|null>(null)
+  const [loadingMyNumbers, setLoadingMyNumbers] = useState(false)
   const [wldRaw, setWldRaw]     = useState(0)
   const [sushiLics] = useState<any[]>([])
   const [lockData, setLockData] = useState({total:'0',tier:'Sin tier',apy:'0%',pending:'0',unstake:'0',unstakeRaw:BigInt(0),nextClaimIn:'—',nextDepositIn:'—',nextDepositSecs:0})
@@ -676,6 +682,7 @@ export default function HachiMiner() {
         { to: C.core, abi: CORE, fnName: 'buyLicenseWLD', args: [selWLD] },
       ])
       toast_('✓ Licencia WLD comprada', '#3fb950')
+      showRaffleNumber()
       await loadAll(addr)
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
   }
@@ -764,6 +771,7 @@ export default function HachiMiner() {
     if (v==='wldminer') { loadWldMiner(addr, p); loadWldMinerHistory(addr, p) }
     if (v==='drachmaminer') { loadDrachmaMiner(addr, p); loadDrachmaMinerHistory(addr, p) }
     if (v==='centrohachi') { loadWLDLics(p); loadWldMiner(addr, p); loadLock(p); loadVipHolders(addr, p); loadWeeklyBonus(addr, p) }
+    if (v==='sorteo') { loadRaffleTotal(p) }
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -902,6 +910,90 @@ export default function HachiMiner() {
     } catch(e) {}
   }
 
+  const RAFFLE_BASELINE = 290
+
+  const loadRaffleTotal = async (p: ethers.JsonRpcProvider) => {
+    try {
+      const dmOld = new ethers.Contract(DRACHMA_MINER_ADDR_OLD, DRACHMA_MINER_ABI, p)
+      const dmNew = new ethers.Contract(DRACHMA_MINER_ADDR_NEW, DRACHMA_MINER_ABI, p)
+      const wmOld = new ethers.Contract(WLD_MINER_ADDR_OLD, WLD_MINER_ABI, p)
+      const wmNew = new ethers.Contract(WLD_MINER_ADDR_NEW, WLD_MINER_ABI, p)
+      const core = new ethers.Contract(C.core, CORE, p)
+      const [dOld, dNew, wOld, wNew, lics] = await Promise.all([
+        dmOld.mineId(), dmNew.mineId(), wmOld.mineId(), wmNew.mineId(), core.wldLicId(),
+      ])
+      setRaffleTotalTickets(Math.max(0, Number(dOld) + Number(dNew) + Number(wOld) + Number(wNew) + Number(lics) - RAFFLE_BASELINE))
+    } catch(e) { /* silencioso */ }
+  }
+
+  const loadMyRaffleNumbers = async () => {
+    if (!addr) return
+    setLoadingMyNumbers(true)
+    try {
+      const p = rpc()
+      const dmOld = new ethers.Contract(DRACHMA_MINER_ADDR_OLD, DRACHMA_MINER_ABI, p)
+      const dmNew = new ethers.Contract(DRACHMA_MINER_ADDR_NEW, DRACHMA_MINER_ABI, p)
+      const wmOld = new ethers.Contract(WLD_MINER_ADDR_OLD, WLD_MINER_ABI, p)
+      const wmNew = new ethers.Contract(WLD_MINER_ADDR_NEW, WLD_MINER_ABI, p)
+      const core = new ethers.Contract(C.core, CORE, p)
+
+      const all: {owner:string, startTime:number}[] = []
+
+      const scanDrachma = async (c: ethers.Contract) => {
+        const total = Number(await c.mineId())
+        for (let id = 1; id <= total; id++) {
+          const m = await c.mines(id)
+          all.push({ owner: m[0].toLowerCase(), startTime: Number(m[6]) })
+        }
+      }
+      const scanWldMiner = async (c: ethers.Contract) => {
+        const total = Number(await c.mineId())
+        for (let id = 1; id <= total; id++) {
+          const m = await c.mines(id)
+          all.push({ owner: m[0].toLowerCase(), startTime: Number(m[7]) })
+        }
+      }
+      const scanLics = async () => {
+        const total = Number(await core.wldLicId())
+        for (let id = 0; id < total; id++) {
+          const l = await core.wldLics(id)
+          all.push({ owner: l[0].toLowerCase(), startTime: Number(l[6]) })
+        }
+      }
+
+      await Promise.all([
+        scanDrachma(dmOld), scanDrachma(dmNew),
+        scanWldMiner(wmOld), scanWldMiner(wmNew),
+        scanLics(),
+      ])
+
+      all.sort((a,b) => a.startTime - b.startTime)
+      const myNumbers: number[] = []
+      all.forEach((item, i) => {
+        const numeroRelativo = (i+1) - RAFFLE_BASELINE
+        if (item.owner === addr.toLowerCase() && numeroRelativo > 0) myNumbers.push(numeroRelativo)
+      })
+      setMyRaffleNumbers(myNumbers)
+    } catch(e:any) { setMyRaffleNumbers([]) }
+    finally { setLoadingMyNumbers(false) }
+  }
+
+  const showRaffleNumber = async () => {
+    try {
+      const p = rpc()
+      const dmOld = new ethers.Contract(DRACHMA_MINER_ADDR_OLD, DRACHMA_MINER_ABI, p)
+      const dmNew = new ethers.Contract(DRACHMA_MINER_ADDR_NEW, DRACHMA_MINER_ABI, p)
+      const wmOld = new ethers.Contract(WLD_MINER_ADDR_OLD, WLD_MINER_ABI, p)
+      const wmNew = new ethers.Contract(WLD_MINER_ADDR_NEW, WLD_MINER_ABI, p)
+      const core = new ethers.Contract(C.core, CORE, p)
+      const [dOld, dNew, wOld, wNew, lics] = await Promise.all([
+        dmOld.mineId(), dmNew.mineId(), wmOld.mineId(), wmNew.mineId(), core.wldLicId(),
+      ])
+      const numero = Number(dOld) + Number(dNew) + Number(wOld) + Number(wNew) + Number(lics) - RAFFLE_BASELINE
+      if (numero > 0) setTimeout(() => toast_(`🎟️ ¡Tu número de sorteo es el #${numero}!`, '#fbbf24'), 2500)
+    } catch(e) { /* si falla el cálculo, no interrumpe la compra */ }
+  }
+
   const mineDrachmaAction = async () => {
     if (!connected) { toast_('Conectá tu wallet primero', '#f85149'); return }
     try {
@@ -913,6 +1005,7 @@ export default function HachiMiner() {
         { to: drachmaMiner.contractAddr, abi: DRACHMA_MINER_ABI, fnName: 'mineDrachma', args: [selDrachmaTier, costWei] },
       ])
       toast_(`✓ Drachma en generación (${drachmaMiner.durationDays} días)`, '#3fb950')
+      showRaffleNumber()
       loadDrachmaMiner(addr, rpc())
     } catch(e: any) {
       toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
@@ -1097,6 +1190,7 @@ export default function HachiMiner() {
         { to: wldMiner.contractAddr, abi: WLD_MINER_ABI, fnName: 'mineWld', args: [wldWei, selWldVariant, minHachi, minDrachma] },
       ])
       toast_('✓ Minería iniciada', '#3fb950')
+      showRaffleNumber()
       setSelWldAmount('')
       loadWldMiner(addr, rpc())
     } catch(e: any) { toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149') }
@@ -1522,6 +1616,7 @@ export default function HachiMiner() {
               {icon:'📜',label:'Hachi Miner',action:()=>loadTab('lics'),iconImg:'/hachi-logo.png'},
               {icon:'🍡',label:'Bocado',action:()=>loadTab('bocado'),iconImg:'/hachi-cat-savings.png'},
               {icon:'⛏️',label:'WLD Miner',action:()=>loadTab('wldminer')},
+              {icon:'🎟️',label:'Sorteo',action:()=>loadTab('sorteo')},
             ].map(btn=><button key={btn.label} onClick={btn.action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'16px 8px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer'}}>
               {(btn as any).iconImg ? <img src={(btn as any).iconImg} alt="" width={26} height={26} style={{borderRadius:13,objectFit:'cover'}} /> : <span style={{fontSize:26}}>{btn.icon}</span>}
               <span style={{fontSize:12,fontWeight:600}}>{btn.label}</span>
@@ -1570,6 +1665,35 @@ export default function HachiMiner() {
                 })}
               </>
             })()}
+          </div>}
+
+          {tab==='sorteo'&&<div>
+            <div style={sLabel}>🎟️ Sorteo Hachi</div>
+            <div style={{...card,textAlign:'center',marginBottom:12}}>
+              <div style={{fontSize:13,color:'#8b949e',marginBottom:4}}>Números repartidos hasta ahora</div>
+              <div style={{fontSize:36,fontWeight:800,color:'#fbbf24',fontFamily:'monospace'}}>{raffleTotalTickets}</div>
+            </div>
+            <div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.7}}>
+              <strong style={{color:'#fbbf24'}}>¿Cómo funciona?</strong> Cada vez que comprás una licencia WLD o minás en WLD Miner, recibís un número único de sorteo — no hace falta hacer nada extra, es automático.
+              <br/><br/>
+              <strong style={{color:'#fbbf24'}}>Premios:</strong>
+              <br/>🥇 1er premio: 50,000 HACHI
+              <br/>🥈 2do premio: 30,000 HACHI
+              <br/>🥉 3er premio: 20,000 HACHI
+              <br/><br/>
+              El sorteo se hace de forma verificable, usando un bloque futuro de la blockchain como semilla al azar — nadie (ni nosotros) puede predecir o manipular el resultado.
+            </div>
+            <button onClick={loadMyRaffleNumbers} disabled={loadingMyNumbers||!connected} style={{...btnP,width:'100%',opacity:(loadingMyNumbers||!connected)?0.5:1}}>{loadingMyNumbers?'Buscando tus números...':'🎟️ Ver mis números'}</button>
+            {myRaffleNumbers!==null&&<div style={{...card,marginTop:12}}>
+              {myRaffleNumbers.length===0
+                ? <div style={{textAlign:'center',color:'#8b949e',fontSize:13}}>Todavía no tenés ningún número — comprá una licencia WLD o miná en WLD Miner para conseguir el tuyo.</div>
+                : <>
+                    <div style={{fontSize:12,color:'#8b949e',marginBottom:8,textAlign:'center'}}>Tenés {myRaffleNumbers.length} número{myRaffleNumbers.length>1?'s':''}:</div>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center'}}>
+                      {myRaffleNumbers.map(n=><span key={n} style={{background:'rgba(251,191,36,.15)',border:'1px solid rgba(251,191,36,.5)',borderRadius:8,padding:'8px 14px',fontSize:16,fontWeight:800,color:'#fbbf24',fontFamily:'monospace'}}>#{n}</span>)}
+                    </div>
+                  </>}
+            </div>}
           </div>}
 
         {tab==='lock'&&<div>
