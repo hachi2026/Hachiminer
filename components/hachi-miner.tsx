@@ -1604,7 +1604,6 @@ export default function HachiMiner() {
                 { key:'wldlics', iconImg:'/hachi-logo.png', label:'Hachi Miner (Licencias WLD)', valor: wldLicsPendTotal>0.01 ? `${wldLicsPendTotal.toFixed(2)} HACHI` : null, pendiente: 'Sin nada acumulado todavía', disponibleAhora:true, tieneInversion: wldLics.length>0, claimFn: claimAllWLD },
                 { key:'wldminer', icon:'⛏️', label:'WLD Miner', valor: (wldMiner.pendingHachi>0.01||wldMiner.pendingDrachma>0.01) ? `${wldMiner.pendingHachi.toFixed(2)} HACHI + ${wldMiner.pendingDrachma.toFixed(2)} Drachma` : null, pendiente: 'Sin nada acumulado todavía', disponibleAhora:true, tieneInversion: wldMiner.tier!==255, claimFn: claimWldMinerAction },
                 { key:'lock', icon:'🔒', label:'Lock (APY)', valor: lockPendNum>0.01 ? `${lockData.pending} HACHI` : null, pendiente: lockData.nextClaimIn!=='—' ? `Disponible en ${lockData.nextClaimIn}` : 'Sin nada acumulado todavía', disponibleAhora: lockData.nextClaimIn==='—', tieneInversion: parseFloat(lockData.total)>0, claimFn: claimAPY },
-                { key:'bocado', iconImg:'/hachi-cat-savings.png', label:'Bocado disponible hoy', valor: bocadoDisponible>0 ? `${bocadoDisponible} disponible${bocadoDisponible>1?'s':''}` : null, pendiente: `Se resetea en ${bocadoResetIn}`, disponibleAhora:false, tieneInversion: wldTierActive!==255, action:()=>loadTab('bocado') },
                 { key:'reinversion', icon:'💎', label:'Reinversión VIP', valor: vipData.pendingHachi>0.01 ? `${vipData.pendingHachi.toFixed(2)} HACHI acumulado` : null, pendiente: 'Sin nada acumulado todavía', disponibleAhora:true, tieneInversion: vipData.level!==255, action:()=>loadTab('lock') },
                 { key:'semanal', icon:'📅', label:'Bono Semanal', valor: weeklyBonus.pending>0.01 ? `${weeklyBonus.pending.toFixed(2)} SUSHI` : null, pendiente: weeklyBonus.secondsUntilNext>0 ? `Disponible en ${fmtSecsCH(weeklyBonus.secondsUntilNext)}` : 'Sin nada acumulado todavía', disponibleAhora: weeklyBonus.secondsUntilNext<=0, tieneInversion: weeklyBonus.dailyRate>0, claimFn: claimWeeklyBonus },
               ]
@@ -1631,14 +1630,19 @@ export default function HachiMiner() {
 
           {tab==='sorteo'&&<div>
             <div style={sLabel}>🎟️ Sorteo Hachi</div>
-            <div style={{...card,textAlign:'center',marginBottom:12}}>
-              <div style={{fontSize:13,color:'#8b949e',marginBottom:4}}>Números repartidos hasta ahora</div>
-              <div style={{fontSize:36,fontWeight:800,color:'#fbbf24',fontFamily:'monospace'}}>{raffleTotalTickets}</div>
-            </div>
             <div style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.4)',borderRadius:8,padding:10,marginBottom:12,textAlign:'center',fontSize:12,color:'#6ee7b7',fontWeight:700}}>
               📅 Sorteo mensual — próxima ejecución: <strong>1 de septiembre</strong>
               <br/><span style={{fontSize:10,fontWeight:400}}>Solo cuentan las licencias/minerías obtenidas desde el 18 de agosto de 2026 en adelante. Las compras anteriores a esa fecha no participan.</span>
             </div>
+            {raffleParticipants.length>0&&<div style={{...card,marginBottom:12}}>
+              <div style={{fontSize:12,color:'#8b949e',marginBottom:8,textAlign:'center'}}>Todos los participantes ({raffleParticipants.length}):</div>
+              <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:300,overflowY:'auto'}}>
+                {raffleParticipants.map(p=><div key={p.numero} style={{display:'flex',justifyContent:'space-between',fontSize:12,fontFamily:'monospace',color:'#c4b5fd',padding:'4px 8px',background:'rgba(167,139,250,.06)',borderRadius:6}}>
+                  <span style={{color:'#fbbf24',fontWeight:700}}>#{p.numero}</span>
+                  <span>{nameFor(p.owner)}</span>
+                </div>)}
+              </div>
+            </div>}
             <div style={{background:'rgba(167,139,250,.08)',border:'1px solid rgba(167,139,250,.35)',borderRadius:8,padding:14,marginBottom:12,fontSize:12,color:'#c4b5fd',lineHeight:1.7}}>
               <strong style={{color:'#fbbf24'}}>¿Cómo funciona?</strong> Cada vez que comprás una licencia WLD o minás en WLD Miner, recibís un número único de sorteo — no hace falta hacer nada extra, es automático.
               <br/><br/>
@@ -1651,26 +1655,6 @@ export default function HachiMiner() {
               <br/><br/>
               El sorteo se hace de forma verificable, usando un bloque futuro de la blockchain como semilla al azar — nadie (ni nosotros) puede predecir o manipular el resultado.
             </div>
-            <button onClick={loadMyRaffleNumbers} disabled={loadingMyNumbers||!connected} style={{...btnP,width:'100%',opacity:(loadingMyNumbers||!connected)?0.5:1}}>{loadingMyNumbers?'⏳ Buscando tus números... puede tardar unos segundos':'🎟️ Ver mis números'}</button>
-            {myRaffleNumbers!==null&&<div style={{...card,marginTop:12}}>
-              {myRaffleNumbers.length===0
-                ? <div style={{textAlign:'center',color:'#8b949e',fontSize:13}}>Todavía no tenés ningún número — comprá una licencia WLD o miná en WLD Miner para conseguir el tuyo.</div>
-                : <>
-                    <div style={{fontSize:12,color:'#8b949e',marginBottom:8,textAlign:'center'}}>Tenés {myRaffleNumbers.length} número{myRaffleNumbers.length>1?'s':''}:</div>
-                    <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center'}}>
-                      {myRaffleNumbers.map(n=><span key={n} style={{background:'rgba(251,191,36,.15)',border:'1px solid rgba(251,191,36,.5)',borderRadius:8,padding:'8px 14px',fontSize:16,fontWeight:800,color:'#fbbf24',fontFamily:'monospace'}}>#{n}</span>)}
-                    </div>
-                  </>}
-            </div>}
-            {raffleParticipants.length>0&&<div style={{...card,marginTop:12}}>
-              <div style={{fontSize:12,color:'#8b949e',marginBottom:8,textAlign:'center'}}>Todos los participantes ({raffleParticipants.length}):</div>
-              <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:300,overflowY:'auto'}}>
-                {raffleParticipants.map(p=><div key={p.numero} style={{display:'flex',justifyContent:'space-between',fontSize:12,fontFamily:'monospace',color:'#c4b5fd',padding:'4px 8px',background:'rgba(167,139,250,.06)',borderRadius:6}}>
-                  <span style={{color:'#fbbf24',fontWeight:700}}>#{p.numero}</span>
-                  <span>{nameFor(p.owner)}</span>
-                </div>)}
-              </div>
-            </div>}
           </div>}
 
         {tab==='lock'&&<div>
