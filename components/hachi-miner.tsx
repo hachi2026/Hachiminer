@@ -1577,7 +1577,6 @@ export default function HachiMiner() {
           <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginBottom:12}}>
             {[
               {icon:'📜',label:'Hachi Miner',action:()=>loadTab('lics'),iconImg:'/hachi-logo.png'},
-              {icon:'🍡',label:'Bocado',action:()=>loadTab('bocado'),iconImg:'/hachi-cat-savings.png'},
               {icon:'⛏️',label:'WLD Miner',action:()=>loadTab('wldminer')},
               {icon:'🎟️',label:'Sorteo',action:()=>loadTab('sorteo')},
             ].map(btn=><button key={btn.label} onClick={btn.action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'16px 8px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer'}}>
