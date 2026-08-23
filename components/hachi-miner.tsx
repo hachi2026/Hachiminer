@@ -127,6 +127,21 @@ const PERMIT2_ABI = [
 ]
 const ORACLE = ['function getRates() view returns (uint256,uint256,uint256,bool,bool,uint256)', 'function previewWldLicense(uint256) view returns (uint256,uint256,uint256,uint256,uint256)']
 const POOLWLD = ['function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256)']
+const HACHI_SLOT_ADDR = '0x8B7Fa43d09408f740a4024A94fcaA6aCcbeE0b80'
+const HACHI_SLOT_ABI = [
+  'function balance(address) view returns (uint256)',
+  'function freeSpinsAvailable(address) view returns (uint256)',
+  'function minBetHachi() view returns (uint256)',
+  'function pool() view returns (uint256)',
+  'function commits(address) view returns (uint256 bet, uint256 blockNumber, uint256 commitHash, bool exists, bool isFreeSpin)',
+  'function deposit(uint256)',
+  'function withdraw(uint256)',
+  'function commitSpin(uint256)',
+  'function commitFreeSpin()',
+  'function revealSpin()',
+  'event SpinRevealed(address indexed user, uint256 bet, uint256 multiplier, uint256 payout)',
+]
+
 const CORE = [
   'function wldLicId() view returns (uint256)',
   'function humanVerified(address) view returns (bool)',
@@ -174,7 +189,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'|'sorteo'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'|'sorteo'|'hachislot'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -307,6 +322,14 @@ export default function HachiMiner() {
   const [claimingWeekly, setClaimingWeekly] = useState(false)
   const [showInfoWeekly, setShowInfoWeekly] = useState(false)
   const [giftOpened, setGiftOpened] = useState(false)
+  const [slotBalance, setSlotBalance] = useState(0)
+  const [slotFreeSpins, setSlotFreeSpins] = useState(0)
+  const [slotMinBet, setSlotMinBet] = useState(10)
+  const [slotBetAmount, setSlotBetAmount] = useState('10')
+  const [slotDepositAmount, setSlotDepositAmount] = useState('')
+  const [slotSpinning, setSlotSpinning] = useState(false)
+  const [slotResult, setSlotResult] = useState<{multiplier:number, payout:number, bet:number}|null>(null)
+  const [slotLoading, setSlotLoading] = useState(false)
   const [raffleTotalTickets, setRaffleTotalTickets] = useState(0)
   const [myRaffleNumbers, setMyRaffleNumbers] = useState<number[]|null>(null)
   const [loadingMyNumbers, setLoadingMyNumbers] = useState(false)
@@ -773,6 +796,7 @@ export default function HachiMiner() {
     if (v==='drachmaminer') { loadDrachmaMiner(addr, p); loadDrachmaMinerHistory(addr, p) }
     if (v==='centrohachi') { loadWLDLics(p); loadWldMiner(addr, p); loadLock(p); loadVipHolders(addr, p); loadWeeklyBonus(addr, p) }
     if (v==='sorteo') { loadRaffleTotal(p) }
+    if (v==='hachislot') { loadSlotStatus(p) }
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -955,6 +979,158 @@ export default function HachiMiner() {
       const numero = Number(dOld) + Number(dNew) + Number(wOld) + Number(wNew) + Number(lics) - RAFFLE_BASELINE
       if (numero > 0) setTimeout(() => toast_(`🎟️ ¡Tu número de sorteo es el #${numero}!`, '#fbbf24'), 2500)
     } catch(e) { /* si falla el cálculo, no interrumpe la compra */ }
+  }
+
+  const SLOT_SYMBOLS = ['🐱','🪙','⛏️','💎','⭐','🍒']
+
+  const loadSlotStatus = async (p: ethers.JsonRpcProvider) => {
+    if (!addr) return
+    try {
+      const c = new ethers.Contract(HACHI_SLOT_ADDR, HACHI_SLOT_ABI, p)
+      const [bal, free, minBet] = await Promise.all([
+        c.balance(addr), c.freeSpinsAvailable(addr), c.minBetHachi(),
+      ])
+      setSlotBalance(fe(bal))
+      setSlotFreeSpins(Number(free))
+      setSlotMinBet(fe(minBet))
+    } catch(e) { /* silencioso */ }
+  }
+
+  const slotDepositAction = async () => {
+    if (!connected) { toast_('Conectá tu wallet primero', '#f85149'); return }
+    const amt = parseFloat(slotDepositAmount)
+    if (!amt || amt <= 0) { toast_('Ingresá un monto válido', '#f85149'); return }
+    setSlotLoading(true)
+    try {
+      const amtWei = pe(amt)
+      await sendTxMulti([
+        ...buildPermit2Approvals(C.hachi, HACHI_SLOT_ADDR, amtWei),
+        { to: HACHI_SLOT_ADDR, abi: HACHI_SLOT_ABI, fnName: 'deposit', args: [amtWei] },
+      ])
+      toast_('✓ Depósito confirmado', '#3fb950')
+      setSlotDepositAmount('')
+      loadSlotStatus(rpc())
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setSlotLoading(false) }
+  }
+
+  const slotWithdrawAction = async () => {
+    if (slotBalance <= 0) { toast_('No tenés saldo para retirar','#f85149'); return }
+    setSlotLoading(true)
+    try {
+      await sendTx(HACHI_SLOT_ADDR, HACHI_SLOT_ABI, 'withdraw', [pe(slotBalance)])
+      toast_('✓ Retiro confirmado', '#3fb950')
+      loadSlotStatus(rpc())
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setSlotLoading(false) }
+  }
+
+  const playSpinSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.type = 'square'
+      osc.frequency.setValueAtTime(220, ctx.currentTime)
+      osc.frequency.linearRampToValueAtTime(440, ctx.currentTime + 0.3)
+      gain.gain.setValueAtTime(0.08, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5)
+      osc.start(); osc.stop(ctx.currentTime + 1.5)
+    } catch(e) { /* audio no soportado, no interrumpe el juego */ }
+  }
+
+  const playWinSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const notes = [523, 659, 784, 1047]
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain); gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i*0.12)
+        gain.gain.setValueAtTime(0.1, ctx.currentTime + i*0.12)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.12 + 0.3)
+        osc.start(ctx.currentTime + i*0.12); osc.stop(ctx.currentTime + i*0.12 + 0.3)
+      })
+    } catch(e) {}
+  }
+
+  // sendTx no devuelve un hash usable con getTransactionReceipt: en MiniKit devuelve
+  // txResult.data (sin esperar el receipt del userOp), y en browser wallet devuelve
+  // directamente tx.wait() (ya es el receipt). Este helper local, solo para revealSpin,
+  // devuelve el receipt real en ambas ramas.
+  const sendTxAndGetReceipt = async (contractAddr: string, abi: string[], fnName: string, args: any[]) => {
+    if (MiniKit.isInstalled()) {
+      const data = encodeFunctionData({ abi: parseAbi(abi), functionName: fnName as any, args })
+      const txResult = await MiniKit.sendTransaction({
+        transactions: [{ to: contractAddr, data }],
+        chainId: WORLDCHAIN_ID,
+      })
+      const { receipt } = await pollUserOp(txResult.data.userOpHash)
+      return receipt
+    } else {
+      const eth = (window as any).ethereum
+      if (!eth) throw new Error('No wallet')
+      const provider = new ethers.BrowserProvider(eth)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(contractAddr, abi, signer)
+      const tx = await contract[fnName](...args)
+      return tx.wait()
+    }
+  }
+
+  const slotSpinAction = async (useFree: boolean) => {
+    if (!connected) { toast_('Conectá tu wallet primero', '#f85149'); return }
+    const betNum = parseFloat(slotBetAmount)
+    if (!useFree && (!betNum || betNum < slotMinBet)) { toast_(`La apuesta mínima es ${slotMinBet} HACHI`, '#f85149'); return }
+    if (!useFree && slotBalance < betNum) { toast_('No tenés saldo suficiente depositado', '#f85149'); return }
+    if (useFree && slotFreeSpins <= 0) { toast_('No tenés tiros gratis disponibles', '#f85149'); return }
+
+    setSlotSpinning(true)
+    setSlotResult(null)
+    playSpinSound()
+    try {
+      if (useFree) {
+        await sendTx(HACHI_SLOT_ADDR, HACHI_SLOT_ABI, 'commitFreeSpin', [])
+      } else {
+        await sendTx(HACHI_SLOT_ADDR, HACHI_SLOT_ABI, 'commitSpin', [pe(betNum)])
+      }
+      toast_('🎰 Girando... esperando confirmación de la blockchain', '#d29922')
+
+      // Esperar ~10 bloques (~20-25 segundos en World Chain) antes de revelar
+      await new Promise(r => setTimeout(r, 22000))
+
+      const p = rpc()
+      const receipt = await sendTxAndGetReceipt(HACHI_SLOT_ADDR, HACHI_SLOT_ABI, 'revealSpin', [])
+      const iface = new ethers.Interface(HACHI_SLOT_ABI)
+      let resultado = null
+      if (receipt) {
+        for (const log of receipt.logs) {
+          try {
+            const parsed = iface.parseLog(log)
+            if (parsed?.name === 'SpinRevealed') {
+              resultado = {
+                bet: fe(parsed.args.bet),
+                multiplier: Number(parsed.args.multiplier)/100,
+                payout: fe(parsed.args.payout),
+              }
+            }
+          } catch(e) {}
+        }
+      }
+      if (resultado) {
+        setSlotResult(resultado)
+        if (resultado.multiplier > 0) { playWinSound(); toast_(`🎉 ¡Ganaste! Multiplicador ${resultado.multiplier}x`, '#3fb950') }
+        else { toast_('😿 Sin suerte esta vez', '#8b949e') }
+      }
+      loadSlotStatus(p)
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setSlotSpinning(false) }
   }
 
   const mineDrachmaAction = async () => {
@@ -1579,6 +1755,7 @@ export default function HachiMiner() {
               {icon:'📜',label:'Hachi Miner',action:()=>loadTab('lics'),iconImg:'/hachi-logo.png'},
               {icon:'⛏️',label:'WLD Miner',action:()=>loadTab('wldminer')},
               {icon:'🎟️',label:'Sorteo',action:()=>loadTab('sorteo')},
+              ...(debugMode ? [{icon:'🎰',label:'Hachi Slot',action:()=>loadTab('hachislot')}] : []),
             ].map(btn=><button key={btn.label} onClick={btn.action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'16px 8px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer'}}>
               {(btn as any).iconImg ? <img src={(btn as any).iconImg} alt="" width={26} height={26} style={{borderRadius:13,objectFit:'cover'}} /> : <span style={{fontSize:26}}>{btn.icon}</span>}
               <span style={{fontSize:12,fontWeight:600}}>{btn.label}</span>
@@ -1657,6 +1834,57 @@ export default function HachiMiner() {
               <br/>🏅 5to premio: 10,000 HACHI
               <br/><br/>
               El sorteo se hace de forma verificable, usando un bloque futuro de la blockchain como semilla al azar — nadie (ni nosotros) puede predecir o manipular el resultado.
+            </div>
+          </div>}
+
+          {tab==='hachislot'&&<div style={{background:'linear-gradient(180deg,#0ea5e9,#0284c7,#075985)',margin:'-16px',padding:16,minHeight:'100vh'}}>
+            <div style={{fontSize:22,fontWeight:900,color:'#fff',textAlign:'center',marginBottom:4,textShadow:'0 2px 8px rgba(0,0,0,.4)'}}>🎰 HACHI SLOT</div>
+            <div style={{fontSize:11,color:'#e0f2fe',textAlign:'center',marginBottom:16}}>⚠️ Modo prueba — visible solo con ?debug=1</div>
+
+            <div style={{background:'rgba(255,255,255,.12)',backdropFilter:'blur(8px)',borderRadius:16,padding:16,marginBottom:14,border:'1px solid rgba(255,255,255,.25)'}}>
+              <div style={{display:'flex',justifyContent:'space-around',marginBottom:12}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:10,color:'#e0f2fe'}}>Saldo en juego</div>
+                  <div style={{fontSize:18,fontWeight:800,color:'#fff'}}>{slotBalance.toFixed(2)} HACHI</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:10,color:'#e0f2fe'}}>Tiros gratis</div>
+                  <div style={{fontSize:18,fontWeight:800,color:'#fbbf24'}}>{slotFreeSpins}</div>
+                </div>
+              </div>
+
+              {/* Rodillos */}
+              <div style={{display:'flex',justifyContent:'center',gap:10,margin:'20px 0'}}>
+                {[0,1,2].map(i=>(
+                  <div key={i} style={{width:64,height:64,background:'#fff',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,boxShadow:'0 4px 12px rgba(0,0,0,.3)',animation:slotSpinning?`slotSpin${i} 0.15s linear infinite`:'none'}}>
+                    {slotSpinning ? SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)] : slotResult ? (slotResult.multiplier>0?'💎':'💧') : '❔'}
+                  </div>
+                ))}
+              </div>
+              <style>{`
+                @keyframes slotSpin0 { 0%{transform:translateY(0)} 50%{transform:translateY(-8px)} 100%{transform:translateY(0)} }
+                @keyframes slotSpin1 { 0%{transform:translateY(0)} 50%{transform:translateY(8px)} 100%{transform:translateY(0)} }
+                @keyframes slotSpin2 { 0%{transform:translateY(0)} 50%{transform:translateY(-8px)} 100%{transform:translateY(0)} }
+              `}</style>
+
+              {slotResult&&<div style={{textAlign:'center',marginBottom:12,padding:10,background:slotResult.multiplier>0?'rgba(52,211,153,.25)':'rgba(248,113,113,.2)',borderRadius:10}}>
+                <div style={{fontSize:14,fontWeight:800,color:'#fff'}}>{slotResult.multiplier>0?`🎉 ¡${slotResult.multiplier}x! Ganaste ${slotResult.payout.toFixed(2)} HACHI`:'😿 Sin suerte esta vez'}</div>
+              </div>}
+
+              <input type="number" value={slotBetAmount} onChange={e=>setSlotBetAmount(e.target.value)} placeholder={`Mínimo ${slotMinBet} HACHI`} disabled={slotSpinning} style={{width:'100%',padding:12,borderRadius:10,border:'none',fontSize:15,marginBottom:10,textAlign:'center',fontWeight:700}} />
+
+              <button onClick={()=>slotSpinAction(false)} disabled={slotSpinning||!connected} style={{width:'100%',padding:14,borderRadius:12,border:'none',background:'linear-gradient(135deg,#fbbf24,#f59e0b)',color:'#1e0840',fontWeight:900,fontSize:16,cursor:'pointer',opacity:(slotSpinning||!connected)?0.5:1,marginBottom:8}}>{slotSpinning?'🎰 Girando...':'🎰 GIRAR'}</button>
+
+              {slotFreeSpins>0&&<button onClick={()=>slotSpinAction(true)} disabled={slotSpinning||!connected} style={{width:'100%',padding:12,borderRadius:12,border:'2px solid #fbbf24',background:'transparent',color:'#fbbf24',fontWeight:800,fontSize:14,cursor:'pointer',opacity:slotSpinning?0.5:1}}>🎁 Usar tiro gratis ({slotFreeSpins} disponibles)</button>}
+            </div>
+
+            <div style={{background:'rgba(255,255,255,.12)',backdropFilter:'blur(8px)',borderRadius:16,padding:16,border:'1px solid rgba(255,255,255,.25)'}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:10}}>💰 Depositar / Retirar</div>
+              <input type="number" value={slotDepositAmount} onChange={e=>setSlotDepositAmount(e.target.value)} placeholder="Monto en HACHI" disabled={slotLoading} style={{width:'100%',padding:10,borderRadius:8,border:'none',fontSize:14,marginBottom:8,textAlign:'center'}} />
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={slotDepositAction} disabled={slotLoading||!connected} style={{flex:1,padding:10,borderRadius:8,border:'none',background:'#fff',color:'#0284c7',fontWeight:700,cursor:'pointer',opacity:slotLoading?0.5:1}}>Depositar</button>
+                <button onClick={slotWithdrawAction} disabled={slotLoading||!connected||slotBalance<=0} style={{flex:1,padding:10,borderRadius:8,border:'1px solid #fff',background:'transparent',color:'#fff',fontWeight:700,cursor:'pointer',opacity:(slotLoading||slotBalance<=0)?0.5:1}}>Retirar todo</button>
+              </div>
             </div>
           </div>}
 
