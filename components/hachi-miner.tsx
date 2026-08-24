@@ -819,7 +819,7 @@ export default function HachiMiner() {
     if (v==='centrohachi') { loadWLDLics(p); loadWldMiner(addr, p); loadLock(p); loadVipHolders(addr, p); loadWeeklyBonus(addr, p) }
     if (v==='sorteo') { loadRaffleTotal(p) }
     if (v==='hachislot') { loadSlotStatus(p) }
-    if (v==='hachiroulette') { loadRouletteStatus(p) }
+    if (v==='hachiroulette') { loadRouletteStatus(p); loadSlotStatus(p) }
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -1988,7 +1988,16 @@ export default function HachiMiner() {
 
           {tab==='hachiroulette'&&<div style={{background:'linear-gradient(180deg,#7f1d1d,#450a0a,#1c0505)',margin:'-16px',padding:16,minHeight:'100vh'}}>
             <div style={{fontSize:22,fontWeight:900,color:'#fff',textAlign:'center',marginBottom:4,textShadow:'0 2px 8px rgba(0,0,0,.4)'}}>🎡 HACHI RULETA</div>
-            <div style={{fontSize:11,color:'#fecaca',textAlign:'center',marginBottom:16}}>⚠️ Modo prueba — visible solo con ?debug=1</div>
+            <div style={{fontSize:11,color:'#fecaca',textAlign:'center',marginBottom:12}}>⚠️ Modo prueba — visible solo con ?debug=1</div>
+
+            <div style={{background:'rgba(255,255,255,.1)',borderRadius:12,padding:12,marginBottom:14,textAlign:'center'}}>
+              <div style={{fontSize:10,color:'#fecaca'}}>💰 Saldo compartido (Slot + Ruleta)</div>
+              <div style={{fontSize:20,fontWeight:800,color:'#fff',marginBottom:8}}>{slotBalance.toFixed(2)} HACHI</div>
+              <div style={{display:'flex',gap:6}}>
+                <input type="number" value={slotDepositAmount} onChange={e=>setSlotDepositAmount(e.target.value)} placeholder="Monto a depositar" disabled={slotLoading} style={{flex:1,padding:8,borderRadius:8,border:'none',fontSize:13,textAlign:'center'}} />
+                <button onClick={slotDepositAction} disabled={slotLoading||!connected} style={{padding:'8px 14px',borderRadius:8,border:'none',background:'#fbbf24',color:'#1c0505',fontWeight:800,fontSize:12,cursor:'pointer',opacity:slotLoading?0.5:1}}>{slotLoading?'...':'Depositar'}</button>
+              </div>
+            </div>
 
             <div style={{background:'rgba(255,255,255,.1)',backdropFilter:'blur(8px)',borderRadius:16,padding:16,marginBottom:14,border:'1px solid rgba(255,255,255,.2)'}}>
               <div style={{display:'flex',justifyContent:'space-around',marginBottom:14}}>
