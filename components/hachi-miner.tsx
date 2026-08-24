@@ -1101,7 +1101,7 @@ export default function HachiMiner() {
     try {
       const amtWei = pe(amt)
       await sendTxMulti([
-        ...buildPermit2Approvals(C.hachi, HACHI_SLOT_ADDR, amtWei),
+        { to: C.hachi, abi: ERC20, fnName: 'approve', args: [HACHI_SLOT_ADDR, amtWei] },
         { to: HACHI_SLOT_ADDR, abi: HACHI_SLOT_ABI, fnName: 'deposit', args: [amtWei] },
       ])
       toast_('✓ Depósito confirmado', '#3fb950')
