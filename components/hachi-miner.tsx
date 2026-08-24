@@ -127,6 +127,20 @@ const PERMIT2_ABI = [
 ]
 const ORACLE = ['function getRates() view returns (uint256,uint256,uint256,bool,bool,uint256)', 'function previewWldLicense(uint256) view returns (uint256,uint256,uint256,uint256,uint256)']
 const POOLWLD = ['function getPoolStatus() view returns (uint256,uint256,uint256,uint256,uint256)']
+const HACHI_ROULETTE_ADDR = '0x647D017947E42c2b934C61587202A16d3A9bD786'
+const HACHI_ROULETTE_ABI = [
+  'function currentRoundInfo() view returns (uint256 roundId, uint8 phase, uint256 startTime, uint256 endBetsTime, uint256 timeRemaining, uint256 totalBets, uint256 betsCount, uint8 winningNumber)',
+  'function minBetHachi() view returns (uint256)',
+  'function pool() view returns (uint256)',
+  'function getUserRoundBets(uint256, address) view returns (uint256[] indices, tuple(address user, uint256 amount, uint8 betType, uint8 chosenNumber, bool claimed)[] bets)',
+  'function startRound()',
+  'function joinRound(uint256, uint8, uint8)',
+  'function startCommit()',
+  'function revealRound()',
+  'function claimWinnings(uint256, uint256)',
+  'event WinningsClaimed(uint256 indexed roundId, address indexed user, uint256 betIndex, uint256 payout)',
+]
+
 const HACHI_SLOT_ADDR = '0x8B7Fa43d09408f740a4024A94fcaA6aCcbeE0b80'
 const HACHI_SLOT_ABI = [
   'function balance(address) view returns (uint256)',
@@ -189,7 +203,7 @@ const RANKING = [
   'function claimPrize()',
   'event PrizePaid(address indexed user, uint256 amount, uint256 rank)',
 ]
-type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'|'sorteo'|'hachislot'
+type Tab = 'home'|'lics'|'lock'|'pools'|'wldminer'|'voting'|'drachmaminer'|'bocado'|'mineria'|'centrohachi'|'sorteo'|'hachislot'|'hachiroulette'
 type Lang = 'es'|'en'|'pt'
 
 const TR = {
@@ -330,6 +344,14 @@ export default function HachiMiner() {
   const [slotSpinning, setSlotSpinning] = useState(false)
   const [slotResult, setSlotResult] = useState<{multiplier:number, payout:number, bet:number}|null>(null)
   const [slotLoading, setSlotLoading] = useState(false)
+  const [rouletteRound, setRouletteRound] = useState({roundId:0, phase:0, timeRemaining:0, totalBets:0, betsCount:0, winningNumber:0})
+  const [rouletteMinBet, setRouletteMinBet] = useState(10)
+  const [rouletteBetAmount, setRouletteBetAmount] = useState('10')
+  const [rouletteBetType, setRouletteBetType] = useState(1) // 1=RED por defecto
+  const [rouletteChosenNumber, setRouletteChosenNumber] = useState('0')
+  const [rouletteMyBets, setRouletteMyBets] = useState<{index:number, amount:number, betType:number, chosenNumber:number, claimed:boolean}[]>([])
+  const [rouletteLoading, setRouletteLoading] = useState(false)
+  const [rouletteSpinning, setRouletteSpinning] = useState(false)
   const [raffleTotalTickets, setRaffleTotalTickets] = useState(0)
   const [myRaffleNumbers, setMyRaffleNumbers] = useState<number[]|null>(null)
   const [loadingMyNumbers, setLoadingMyNumbers] = useState(false)
@@ -797,6 +819,7 @@ export default function HachiMiner() {
     if (v==='centrohachi') { loadWLDLics(p); loadWldMiner(addr, p); loadLock(p); loadVipHolders(addr, p); loadWeeklyBonus(addr, p) }
     if (v==='sorteo') { loadRaffleTotal(p) }
     if (v==='hachislot') { loadSlotStatus(p) }
+    if (v==='hachiroulette') { loadRouletteStatus(p) }
   }
 
   const loadWLDLics = async (p: ethers.JsonRpcProvider) => {
@@ -979,6 +1002,80 @@ export default function HachiMiner() {
       const numero = Number(dOld) + Number(dNew) + Number(wOld) + Number(wNew) + Number(lics) - RAFFLE_BASELINE
       if (numero > 0) setTimeout(() => toast_(`🎟️ ¡Tu número de sorteo es el #${numero}!`, '#fbbf24'), 2500)
     } catch(e) { /* si falla el cálculo, no interrumpe la compra */ }
+  }
+
+  const ROULETTE_BET_NAMES = ['Número','Rojo','Negro','Par','Impar','1-18','19-36']
+
+  const loadRouletteStatus = async (p: ethers.JsonRpcProvider) => {
+    try {
+      const c = new ethers.Contract(HACHI_ROULETTE_ADDR, HACHI_ROULETTE_ABI, p)
+      const [info, minBet] = await Promise.all([c.currentRoundInfo(), c.minBetHachi()])
+      setRouletteRound({
+        roundId: Number(info[0]), phase: Number(info[1]), timeRemaining: Number(info[4]),
+        totalBets: fe(info[5]), betsCount: Number(info[6]), winningNumber: Number(info[7]),
+      })
+      setRouletteMinBet(fe(minBet))
+      if (addr && Number(info[0]) > 0) {
+        const [indices, bets] = await c.getUserRoundBets(info[0], addr)
+        setRouletteMyBets(indices.map((idx:any, i:number) => ({
+          index: Number(idx), amount: fe(bets[i].amount), betType: Number(bets[i].betType),
+          chosenNumber: Number(bets[i].chosenNumber), claimed: bets[i].claimed,
+        })))
+      } else {
+        setRouletteMyBets([])
+      }
+    } catch(e) { /* silencioso */ }
+  }
+
+  const rouletteBetAction = async () => {
+    if (!connected) { toast_('Conectá tu wallet primero', '#f85149'); return }
+    const amt = parseFloat(rouletteBetAmount)
+    if (!amt || amt < rouletteMinBet) { toast_(`La apuesta mínima es ${rouletteMinBet} HACHI`, '#f85149'); return }
+    setRouletteLoading(true)
+    try {
+      const num = rouletteBetType === 0 ? parseInt(rouletteChosenNumber) || 0 : 0
+      if (rouletteRound.roundId === 0 || rouletteRound.phase === 2) {
+        try { await sendTx(HACHI_ROULETTE_ADDR, HACHI_ROULETTE_ABI, 'startRound', []) } catch(e) {}
+      }
+      await sendTx(HACHI_ROULETTE_ADDR, HACHI_ROULETTE_ABI, 'joinRound', [pe(amt), rouletteBetType, num])
+      toast_('✓ Apuesta confirmada', '#3fb950')
+      loadRouletteStatus(rpc())
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setRouletteLoading(false) }
+  }
+
+  const rouletteCloseBetsAction = async () => {
+    setRouletteLoading(true)
+    try {
+      await sendTx(HACHI_ROULETTE_ADDR, HACHI_ROULETTE_ABI, 'startCommit', [])
+      toast_('✓ Apuestas cerradas, esperando confirmación', '#d29922')
+      loadRouletteStatus(rpc())
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setRouletteLoading(false) }
+  }
+
+  const rouletteRevealAction = async () => {
+    setRouletteSpinning(true)
+    try {
+      await sendTx(HACHI_ROULETTE_ADDR, HACHI_ROULETTE_ABI, 'revealRound', [])
+      toast_('✓ ¡Resultado revelado!', '#3fb950')
+      loadRouletteStatus(rpc())
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setRouletteSpinning(false) }
+  }
+
+  const rouletteClaimAction = async (betIndex: number) => {
+    setRouletteLoading(true)
+    try {
+      await sendTx(HACHI_ROULETTE_ADDR, HACHI_ROULETTE_ABI, 'claimWinnings', [rouletteRound.roundId, betIndex])
+      toast_('✓ Reclamo confirmado', '#3fb950')
+      loadRouletteStatus(rpc())
+    } catch(e:any) {
+      toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
+    } finally { setRouletteLoading(false) }
   }
 
   const SLOT_SYMBOLS = ['🐱','🪙','⛏️','💎','⭐','🍒']
@@ -1756,6 +1853,7 @@ export default function HachiMiner() {
               {icon:'⛏️',label:'WLD Miner',action:()=>loadTab('wldminer')},
               {icon:'🎟️',label:'Sorteo',action:()=>loadTab('sorteo')},
               ...(debugMode ? [{icon:'🎰',label:'Hachi Slot',action:()=>loadTab('hachislot')}] : []),
+              ...(debugMode ? [{icon:'🎡',label:'Hachi Ruleta',action:()=>loadTab('hachiroulette')}] : []),
             ].map(btn=><button key={btn.label} onClick={btn.action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'16px 8px',borderRadius:12,border:'1px solid #5b21b6',background:'linear-gradient(135deg,#2d1b69,#1e0840)',color:'#e6edf3',cursor:'pointer'}}>
               {(btn as any).iconImg ? <img src={(btn as any).iconImg} alt="" width={26} height={26} style={{borderRadius:13,objectFit:'cover'}} /> : <span style={{fontSize:26}}>{btn.icon}</span>}
               <span style={{fontSize:12,fontWeight:600}}>{btn.label}</span>
@@ -1886,6 +1984,71 @@ export default function HachiMiner() {
                 <button onClick={slotWithdrawAction} disabled={slotLoading||!connected||slotBalance<=0} style={{flex:1,padding:10,borderRadius:8,border:'1px solid #fff',background:'transparent',color:'#fff',fontWeight:700,cursor:'pointer',opacity:(slotLoading||slotBalance<=0)?0.5:1}}>Retirar todo</button>
               </div>
             </div>
+          </div>}
+
+          {tab==='hachiroulette'&&<div style={{background:'linear-gradient(180deg,#7f1d1d,#450a0a,#1c0505)',margin:'-16px',padding:16,minHeight:'100vh'}}>
+            <div style={{fontSize:22,fontWeight:900,color:'#fff',textAlign:'center',marginBottom:4,textShadow:'0 2px 8px rgba(0,0,0,.4)'}}>🎡 HACHI RULETA</div>
+            <div style={{fontSize:11,color:'#fecaca',textAlign:'center',marginBottom:16}}>⚠️ Modo prueba — visible solo con ?debug=1</div>
+
+            <div style={{background:'rgba(255,255,255,.1)',backdropFilter:'blur(8px)',borderRadius:16,padding:16,marginBottom:14,border:'1px solid rgba(255,255,255,.2)'}}>
+              <div style={{display:'flex',justifyContent:'space-around',marginBottom:14}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:10,color:'#fecaca'}}>Ronda</div>
+                  <div style={{fontSize:16,fontWeight:800,color:'#fff'}}>#{rouletteRound.roundId||'—'}</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:10,color:'#fecaca'}}>Fase</div>
+                  <div style={{fontSize:16,fontWeight:800,color:'#fbbf24'}}>{['Abierta','Cerrada','Resuelta'][rouletteRound.phase]}</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:10,color:'#fecaca'}}>Apuestas</div>
+                  <div style={{fontSize:16,fontWeight:800,color:'#fff'}}>{rouletteRound.betsCount}</div>
+                </div>
+              </div>
+
+              {/* Rueda visual */}
+              <div style={{textAlign:'center',margin:'16px 0'}}>
+                <div style={{width:90,height:90,borderRadius:'50%',background:rouletteSpinning?'conic-gradient(#dc2626,#111,#dc2626,#111,#dc2626,#111,#dc2626,#111)':'#1c0505',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:900,color:'#fff',border:'4px solid #fbbf24',animation:rouletteSpinning?'ruletaSpin 0.6s linear infinite':'none',boxShadow:'0 4px 20px rgba(0,0,0,.5)'}}>
+                  {rouletteSpinning ? '' : rouletteRound.phase===2 ? rouletteRound.winningNumber : '?'}
+                </div>
+                <style>{`@keyframes ruletaSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+                {rouletteRound.phase===2&&<div style={{fontSize:12,color:'#fecaca',marginTop:6}}>Número ganador: <strong style={{color:'#fbbf24'}}>{rouletteRound.winningNumber}</strong> ({rouletteRound.winningNumber===0?'Verde':[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(rouletteRound.winningNumber)?'Rojo':'Negro'})</div>}
+                {rouletteRound.phase===0&&<div style={{fontSize:12,color:'#fecaca',marginTop:6}}>Tiempo restante para apostar: {rouletteRound.timeRemaining}s</div>}
+              </div>
+
+              {/* Selector de tipo de apuesta */}
+              <div style={{fontSize:11,color:'#fecaca',marginBottom:6,textAlign:'center'}}>Elegí tu apuesta</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:10}}>
+                {ROULETTE_BET_NAMES.map((n,i)=>i===0?null:(
+                  <button key={i} onClick={()=>setRouletteBetType(i)} disabled={rouletteLoading} style={{padding:'8px 4px',borderRadius:8,border:rouletteBetType===i?'2px solid #fbbf24':'1px solid rgba(255,255,255,.3)',background:rouletteBetType===i?'rgba(251,191,36,.2)':'rgba(255,255,255,.05)',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>{n}</button>
+                ))}
+                <button onClick={()=>setRouletteBetType(0)} disabled={rouletteLoading} style={{padding:'8px 4px',borderRadius:8,border:rouletteBetType===0?'2px solid #fbbf24':'1px solid rgba(255,255,255,.3)',background:rouletteBetType===0?'rgba(251,191,36,.2)':'rgba(255,255,255,.05)',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',gridColumn:'span 3'}}>Número exacto (paga 35x)</button>
+              </div>
+
+              {rouletteBetType===0&&<input type="number" min="0" max="36" value={rouletteChosenNumber} onChange={e=>setRouletteChosenNumber(e.target.value)} placeholder="Número (0-36)" disabled={rouletteLoading} style={{width:'100%',padding:10,borderRadius:8,border:'none',fontSize:14,marginBottom:8,textAlign:'center',fontWeight:700}} />}
+
+              <input type="number" value={rouletteBetAmount} onChange={e=>setRouletteBetAmount(e.target.value)} placeholder={`Mínimo ${rouletteMinBet} HACHI`} disabled={rouletteLoading} style={{width:'100%',padding:12,borderRadius:10,border:'none',fontSize:15,marginBottom:10,textAlign:'center',fontWeight:700}} />
+
+              <button onClick={rouletteBetAction} disabled={rouletteLoading||!connected||rouletteRound.phase===1} style={{width:'100%',padding:14,borderRadius:12,border:'none',background:'linear-gradient(135deg,#fbbf24,#f59e0b)',color:'#1c0505',fontWeight:900,fontSize:16,cursor:'pointer',opacity:(rouletteLoading||!connected||rouletteRound.phase===1)?0.5:1,marginBottom:8}}>{rouletteLoading?'Procesando...':'🎡 APOSTAR'}</button>
+
+              {rouletteRound.phase===0&&rouletteRound.betsCount>0&&<button onClick={rouletteCloseBetsAction} disabled={rouletteLoading} style={{width:'100%',padding:10,borderRadius:10,border:'1px solid rgba(255,255,255,.4)',background:'transparent',color:'#fff',fontWeight:700,cursor:'pointer',opacity:rouletteLoading?0.5:1,marginBottom:8}}>Cerrar apuestas de esta ronda</button>}
+
+              {rouletteRound.phase===1&&<button onClick={rouletteRevealAction} disabled={rouletteSpinning} style={{width:'100%',padding:10,borderRadius:10,border:'1px solid rgba(255,255,255,.4)',background:'transparent',color:'#fff',fontWeight:700,cursor:'pointer',opacity:rouletteSpinning?0.5:1,marginBottom:8}}>{rouletteSpinning?'Girando...':'Revelar resultado'}</button>}
+            </div>
+
+            {rouletteMyBets.length>0&&<div style={{background:'rgba(255,255,255,.1)',backdropFilter:'blur(8px)',borderRadius:16,padding:16,border:'1px solid rgba(255,255,255,.2)'}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:10}}>Tus apuestas en esta ronda</div>
+              {rouletteMyBets.map(b=>(
+                <div key={b.index} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.15)'}}>
+                  <span style={{fontSize:12,color:'#fecaca'}}>{ROULETTE_BET_NAMES[b.betType]}{b.betType===0?` (${b.chosenNumber})`:''} · {b.amount.toFixed(2)} HACHI</span>
+                  {b.claimed
+                    ? <span style={{fontSize:11,color:'#8b949e'}}>Reclamado</span>
+                    : rouletteRound.phase===2
+                      ? <button onClick={()=>rouletteClaimAction(b.index)} disabled={rouletteLoading} style={{padding:'4px 10px',borderRadius:6,border:'none',background:'#fbbf24',color:'#1c0505',fontWeight:700,fontSize:11,cursor:'pointer'}}>Reclamar</button>
+                      : <span style={{fontSize:11,color:'#fecaca'}}>Pendiente</span>}
+                </div>
+              ))}
+            </div>}
           </div>}
 
         {tab==='lock'&&<div>
