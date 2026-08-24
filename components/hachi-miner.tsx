@@ -1108,6 +1108,7 @@ export default function HachiMiner() {
       setSlotDepositAmount('')
       loadSlotStatus(rpc())
     } catch(e:any) {
+      log('slot deposit err: ' + JSON.stringify(e, Object.getOwnPropertyNames(e)).slice(0,900))
       toast_('Error: '+(e.reason||e.message||'error').slice(0,80), '#f85149')
     } finally { setSlotLoading(false) }
   }
