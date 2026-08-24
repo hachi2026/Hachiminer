@@ -141,7 +141,7 @@ const HACHI_ROULETTE_ABI = [
   'event WinningsClaimed(uint256 indexed roundId, address indexed user, uint256 betIndex, uint256 payout)',
 ]
 
-const HACHI_SLOT_ADDR = '0x8B7Fa43d09408f740a4024A94fcaA6aCcbeE0b80'
+const HACHI_SLOT_ADDR = '0x08AA75B54115A5f2a778b3D1D58FF2f4333BE209'
 const HACHI_SLOT_ABI = [
   'function balance(address) view returns (uint256)',
   'function freeSpinsAvailable(address) view returns (uint256)',
